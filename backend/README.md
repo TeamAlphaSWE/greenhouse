@@ -12,13 +12,18 @@ backend/
 │   ├── db.py
 │   ├── json.py
 │   ├── repository.py
+│   ├── repositories/
+│   │   ├── __init__.py
+│   │   └── plants.py
 │   └── routes/
 │       ├── __init__.py
-│       └── health.py
+│       ├── health.py
+│       └── plants.py
 ├── tests/
 │   ├── conftest.py
 │   ├── test_db.py
 │   ├── test_health.py
+│   ├── test_plants.py
 │   └── test_repository.py
 ├── requirements.txt
 └── README.md
@@ -88,13 +93,34 @@ Response:
 }
 ```
 
+### Plants
+
+Example CRUD resource built on a repository.
+
+| Method | Path | Body | Response |
+| --- | --- | --- | --- |
+| `GET` | `/api/v1/plants` | | `200` list of plants |
+| `GET` | `/api/v1/plants/<id>` | | `200` plant, `404` if not found |
+| `POST` | `/api/v1/plants` | `{"name": "Basil"}` | `201` created plant, `400` if `name` is missing |
+| `PATCH` | `/api/v1/plants/<id>` | `{"name": "Thai Basil"}` | `200` updated plant, `400` / `404` |
+| `DELETE` | `/api/v1/plants/<id>` | | `204`, `404` if not found |
+
+A plant looks like:
+
+```json
+{
+  "id": "6650c1f2a1b2c3d4e5f60718",
+  "name": "Basil"
+}
+```
+
 ## Database Access
 
 The app creates one `MongoClient` at startup (`app/db.py`) and shares it across all requests; PyMongo pools connections internally, so no per-request setup or teardown is needed.
 
 ### Repositories
 
-Data access goes through a repository per collection. Subclass `Repository` (`app/repository.py`), set the collection name, and add any domain-specific queries:
+Data access goes through a repository per collection, kept in `app/repositories/`. Subclass `Repository` (`app/repository.py`), set the collection name, and add any domain-specific queries. The plants endpoints (`app/repositories/plants.py`, `app/routes/plants.py`, `tests/test_plants.py`) are a complete working example.
 
 ```python
 from app.repository import Repository
