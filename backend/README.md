@@ -10,13 +10,16 @@ backend/
 │   ├── __init__.py
 │   ├── config.py
 │   ├── db.py
+│   ├── json.py
+│   ├── repository.py
 │   └── routes/
 │       ├── __init__.py
 │       └── health.py
 ├── tests/
 │   ├── conftest.py
 │   ├── test_db.py
-│   └── test_health.py
+│   ├── test_health.py
+│   └── test_repository.py
 ├── requirements.txt
 └── README.md
 ```
@@ -87,19 +90,44 @@ Response:
 
 ## Database Access
 
-The app creates one `MongoClient` at startup (`app/db.py`) and shares it across all requests; PyMongo pools connections internally, so no per-request setup or teardown is needed. Use the helpers in `app.db` anywhere inside a request or app context:
+The app creates one `MongoClient` at startup (`app/db.py`) and shares it across all requests; PyMongo pools connections internally, so no per-request setup or teardown is needed.
+
+### Repositories
+
+Data access goes through a repository per collection. Subclass `Repository` (`app/repository.py`), set the collection name, and add any domain-specific queries:
 
 ```python
-from app.db import get_collection
+from app.repository import Repository
 
-def list_plants():
-    return list(get_collection("plants").find({}, {"_id": 0}))
+
+class PlantRepository(Repository):
+    collection_name = "plants"
+
+    def find_by_kind(self, kind):
+        return self.find({"kind": kind})
+
+
+plants = PlantRepository()
 ```
 
-- `get_collection(name)` – a collection in the configured database
-- `get_db()` – the configured `Database`
-- `get_client()` – the shared `MongoClient` (e.g. for transactions)
-- `ping()` – `True` if MongoDB is reachable
+Every repository provides `find(filter)`, `find_one(filter)`, `get(id)`, `create(data)`, `update(id, changes)` and `delete(id)`. Documents come back as plain dicts with a string `id` in place of Mongo's `_id: ObjectId`, and ids are passed in as strings. `get`, `update` and `delete` treat a malformed id like a missing document (`None` / `False`), so route handlers never touch BSON types:
+
+```python
+@bp.get("/plants/<plant_id>")
+def show(plant_id):
+    plant = plants.get(plant_id)
+    if plant is None:
+        abort(404)
+    return jsonify(plant)
+```
+
+For queries the base class doesn't cover (aggregations, bulk writes), use `self.collection` inside the repository to reach the PyMongo collection directly.
+
+The app also registers a JSON provider (`app/json.py`) that serializes `ObjectId` values as strings, so documents with ObjectId references can be passed to `jsonify` as-is.
+
+### Lower-level helpers
+
+`app.db` exposes the underlying objects if you need them: `get_collection(name)`, `get_db()`, `get_client()` (e.g. for transactions) and `ping()`.
 
 The client connects lazily, so the app starts even when MongoDB is not running; queries will fail after `MONGO_SERVER_SELECTION_TIMEOUT_MS`.
 
@@ -108,7 +136,7 @@ Tests do not need a running MongoDB: the `app` fixture in `tests/conftest.py` in
 ```python
 def test_something(app):
     with app.app_context():
-        get_collection("plants").insert_one({"name": "Basil"})
+        plants.create({"name": "Basil"})
 ```
 
 ## Running Tests
@@ -131,4 +159,4 @@ The backend uses Flask's application factory pattern. The application is created
 
 API routes should be organized using Flask Blueprints under `app/routes/`.
 
-As the backend grows, additional services, integrations, and data access code should be organized within the `app/` package rather than placed directly in route handlers. Data access code should get collections through `app.db` rather than creating its own `MongoClient`.
+As the backend grows, additional services, integrations, and data access code should be organized within the `app/` package rather than placed directly in route handlers. Data access code should live in `Repository` subclasses rather than creating its own `MongoClient` or calling PyMongo from route handlers.

@@ -2,10 +2,12 @@ from flask import Flask
 
 from app.config import Config
 from app.db import init_db
+from app.json import MongoJSONProvider
 
 
 def create_app(config=None):
     app = Flask(__name__)
+    app.json = MongoJSONProvider(app)
     app.config.from_object(Config)
     if config:
         app.config.from_mapping(config)
