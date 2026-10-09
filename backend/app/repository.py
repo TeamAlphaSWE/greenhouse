@@ -5,16 +5,18 @@ Documents leave the repository with a string `id` instead of Mongo's
 `_id: ObjectId`, and ids passed in are strings, so callers never deal with
 BSON types:
 
-    class PlantRepository(Repository):
-        collection_name = "plants"
+    class ZoneRepository(Repository):
+        collection_name = "zones"
 
         def find_by_name(self, name):
             return self.find_one({"name": name})
 
-    plants = PlantRepository()
-    plant = plants.create({"name": "Basil"})   # {"id": "...", "name": "Basil"}
-    plants.get(plant["id"])
+    zones = ZoneRepository()
+    zone = zones.create({"name": "Zone A"})   # {"id": "...", "name": "Zone A"}
+    zones.get(zone["id"])
 """
+
+from __future__ import annotations
 
 from bson import ObjectId
 from bson.errors import InvalidId
