@@ -17,9 +17,6 @@ def create_app(config=None):
     from app.routes.health import health
     app.register_blueprint(health)
 
-    from app.routes.plants import plants
-    app.register_blueprint(plants)
-    
     from app.routes.zones import zones
     app.register_blueprint(zones)
 

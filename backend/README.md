@@ -13,17 +13,14 @@ backend/
 │   ├── json.py
 │   ├── repository.py
 │   ├── repositories/
-│   │   ├── __init__.py
-│   │   └── plants.py
+│   │   └── __init__.py
 │   └── routes/
 │       ├── __init__.py
-│       ├── health.py
-│       └── plants.py
+│       └── health.py
 ├── tests/
 │   ├── conftest.py
 │   ├── test_db.py
 │   ├── test_health.py
-│   ├── test_plants.py
 │   └── test_repository.py
 ├── requirements.txt
 └── README.md
@@ -58,7 +55,7 @@ The backend reads its settings from environment variables. When started through 
 | Variable | Default | Description |
 | --- | --- | --- |
 | `MONGO_URI` | `mongodb://localhost:27017` | MongoDB connection string |
-| `MONGO_DB_NAME` | `greenhouse` | Database used by the app |
+| `MONGO_DB_NAME` | `year2_greenhouse_db` | Database used by the app |
 | `MONGO_SERVER_SELECTION_TIMEOUT_MS` | `5000` | How long a query waits for a reachable server before failing |
 
 ## Running the Backend
@@ -93,58 +90,37 @@ Response:
 }
 ```
 
-### Plants
-
-Example CRUD resource built on a repository.
-
-| Method | Path | Body | Response |
-| --- | --- | --- | --- |
-| `GET` | `/api/v1/plants` | | `200` list of plants |
-| `GET` | `/api/v1/plants/<id>` | | `200` plant, `404` if not found |
-| `POST` | `/api/v1/plants` | `{"name": "Basil"}` | `201` created plant, `400` if `name` is missing |
-| `PATCH` | `/api/v1/plants/<id>` | `{"name": "Thai Basil"}` | `200` updated plant, `400` / `404` |
-| `DELETE` | `/api/v1/plants/<id>` | | `204`, `404` if not found |
-
-A plant looks like:
-
-```json
-{
-  "id": "6650c1f2a1b2c3d4e5f60718",
-  "name": "Basil"
-}
-```
-
 ## Database Access
 
 The app creates one `MongoClient` at startup (`app/db.py`) and shares it across all requests; PyMongo pools connections internally, so no per-request setup or teardown is needed.
 
 ### Repositories
 
-Data access goes through a repository per collection, kept in `app/repositories/`. Subclass `Repository` (`app/repository.py`), set the collection name, and add any domain-specific queries. The plants endpoints (`app/repositories/plants.py`, `app/routes/plants.py`, `tests/test_plants.py`) are a complete working example.
+Data access goes through a repository per collection, kept in `app/repositories/`. Subclass `Repository` (`app/repository.py`), set the collection name, and add any domain-specific queries:
 
 ```python
 from app.repository import Repository
 
 
-class PlantRepository(Repository):
-    collection_name = "plants"
+class ZoneRepository(Repository):
+    collection_name = "zones"
 
     def find_by_kind(self, kind):
         return self.find({"kind": kind})
 
 
-plants = PlantRepository()
+zones = ZoneRepository()
 ```
 
 Every repository provides `find(filter)`, `find_one(filter)`, `get(id)`, `create(data)`, `update(id, changes)` and `delete(id)`. Documents come back as plain dicts with a string `id` in place of Mongo's `_id: ObjectId`, and ids are passed in as strings. `get`, `update` and `delete` treat a malformed id like a missing document (`None` / `False`), so route handlers never touch BSON types:
 
 ```python
-@bp.get("/plants/<plant_id>")
-def show(plant_id):
-    plant = plants.get(plant_id)
-    if plant is None:
+@bp.get("/zones/<zone_id>")
+def show(zone_id):
+    zone = zones.get(zone_id)
+    if zone is None:
         abort(404)
-    return jsonify(plant)
+    return jsonify(zone)
 ```
 
 For queries the base class doesn't cover (aggregations, bulk writes), use `self.collection` inside the repository to reach the PyMongo collection directly.
@@ -162,7 +138,7 @@ Tests do not need a running MongoDB: the `app` fixture in `tests/conftest.py` in
 ```python
 def test_something(app):
     with app.app_context():
-        plants.create({"name": "Basil"})
+        zones.create({"name": "Zone A"})
 ```
 
 ## Running Tests
