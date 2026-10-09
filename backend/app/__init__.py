@@ -20,4 +20,7 @@ def create_app(config=None):
     from app.routes.zones import zones
     app.register_blueprint(zones)
 
+    from app.routes.sensors import sensors
+    app.register_blueprint(sensors)
+    
     return app
