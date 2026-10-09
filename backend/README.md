@@ -55,7 +55,7 @@ The backend reads its settings from environment variables. When started through 
 | Variable | Default | Description |
 | --- | --- | --- |
 | `MONGO_URI` | `mongodb://localhost:27017` | MongoDB connection string |
-| `MONGO_DB_NAME` | `greenhouse` | Database used by the app |
+| `MONGO_DB_NAME` | `year2_greenhouse_db` | Database used by the app |
 | `MONGO_SERVER_SELECTION_TIMEOUT_MS` | `5000` | How long a query waits for a reachable server before failing |
 
 ## Running the Backend
