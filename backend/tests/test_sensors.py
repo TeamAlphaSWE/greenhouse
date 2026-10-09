@@ -22,7 +22,7 @@ def test_list_sensors(app, client):
 
     response = client.get("/api/v1/sensors")
     body = response.get_json()
-    print(body)
+    
 
     assert response.status_code == 200
     assert body["total"] == 4
