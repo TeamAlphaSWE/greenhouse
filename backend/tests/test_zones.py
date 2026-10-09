@@ -21,7 +21,7 @@ def test_list_zones(app, client):
 
     response = client.get("/api/v1/zones")
     body = response.get_json()
-    print(body)
+
 
     assert response.status_code == 200
     assert body["total"] == 3
