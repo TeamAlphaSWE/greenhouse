@@ -8,6 +8,9 @@ sensor_data = Blueprint("sensor_data", __name__, url_prefix="/api/v1/sensor_data
 
 @sensor_data.get("/<sensor_id>")
 def list_sensor_data(sensor_id):
+    if sensor_data_repository._to_object_id(sensor_id) is None:
+        return jsonify({"error": "Invalid sensor_id"}), 400
+
     try:
         readings = sensor_data_repository.find_by_sensor_id(sensor_id)
     except PyMongoError:

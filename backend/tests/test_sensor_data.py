@@ -47,11 +47,11 @@ def test_list_sensor_data_filters_by_sensor_id(app, client):
     assert all(isinstance(r["id"], str) for r in body["sensor_data"])
 
 
-def test_list_sensor_data_invalid_sensor_id_returns_empty(client):
+def test_list_sensor_data_invalid_sensor_id_returns_400(client):
     response = client.get("/api/v1/sensor_data/not-an-id")
 
-    assert response.status_code == 200
-    assert response.get_json() == {"sensor_data": [], "total": 0}
+    assert response.status_code == 400
+    assert response.get_json() == {"error": "Invalid sensor_id"}
 
 
 def test_list_sensor_data_database_error_returns_500(client, monkeypatch):
