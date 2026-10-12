@@ -5,7 +5,7 @@
 #   This script connects to Mosquitto, listens for those readings, pulls out the values we
 #   care about, and prints each reading.
 
-
+from config import MQTT_HOST, MQTT_PORT
 import json
 from datetime import datetime, timezone       
 import paho.mqtt.client as mqtt             # type: ignore
@@ -86,11 +86,7 @@ if __name__ == "__main__":
     client.on_message = on_message
 
     # Connect to the broker.
-    #   "localhost" - the broker is on this same machine (Mosquitto on the MacBook)
-    #   1883        - the standard MQTT port (Mosquitto's default)
-    #   1884        - because currently ssh tunneling into greenhouse macbook from personal mac
-    #               - this will be changed back to port 1883 when running inside greenhouse
-    client.connect("localhost", 1884)
+    client.connect(MQTT_HOST, MQTT_PORT)
 
     # Run forever: wait for messages, call on_message for each one, and reconnect automatically
     # if the connection drops the script stays on this line until you press Ctrl+C.
