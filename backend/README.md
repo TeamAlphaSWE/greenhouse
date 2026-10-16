@@ -89,6 +89,25 @@ Response:
   "status": "ok"
 }
 ```
+### Sensor Data
+
+| Method | Path | Body | Response |
+| --- | --- | --- | --- |
+| `GET` | `/api/v1/sensor_data/<sensor_id>` | | `200` list of readings, `400` invalid id |
+| `POST` | `/api/v1/sensor_data` | see below | `201` `{"sensor_data": {"id": "..."}}`, `400` invalid body |
+
+```json
+{
+  "sensor_id": "6ac430e14eb645800db1771f",
+  "values": [
+    {"type": "temperature", "value": 23.4},
+    {"type": "humidity", "value": 45.9},
+    {"type": "battery", "value": 66}
+  ]
+}
+```
+
+`sensor_id` is the MongoDB id of the sensor. The server adds the timestamp.
 
 ## Database Access
 

@@ -1,4 +1,5 @@
 from bson import ObjectId
+from datetime import datetime
 from flask.json.provider import DefaultJSONProvider
 
 
@@ -10,4 +11,6 @@ class MongoJSONProvider(DefaultJSONProvider):
     def default(o):
         if isinstance(o, ObjectId):
             return str(o)
+        if isinstance(o, datetime):
+            return o.isoformat()
         return DefaultJSONProvider.default(o)
