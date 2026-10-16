@@ -9,7 +9,7 @@ flock -n 9 || { echo 'Another deployment is running'; exit 1; }
 /usr/bin/python3 -m pip install --user --no-cache-dir -r backend/requirements.txt -r frontend/requirements.txt
 mkdir -p "$HOME/.config/systemd/user" "$HOME/app/proxy/run"
 # Validate before restarting the services.
-/usr/sbin/nginx -t -e "$HOME/app/proxy/run/error.log" -c "$HOME/app/proxy/proxy.conf"
+/usr/sbin/nginx -t -c "$HOME/app/proxy/proxy.conf"
 cp deploy/systemd/*.service "$HOME/.config/systemd/user/"
 systemctl --user daemon-reload
 systemctl --user enable greenhouse-backend greenhouse-frontend greenhouse-proxy
