@@ -1,0 +1,11 @@
+[Unit]
+Description=Greenhouse nginx proxy
+
+[Service]
+ExecStartPre=/bin/mkdir -p %h/app/proxy/run
+ExecStart=/usr/sbin/nginx -e %h/app/proxy/run/error.log -c %h/app/proxy/proxy.conf -g "daemon off;"
+Restart=always
+RestartSec=3
+
+[Install]
+WantedBy=default.target
