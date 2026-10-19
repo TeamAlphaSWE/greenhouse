@@ -1,0 +1,48 @@
+{
+  "$jsonSchema": {
+    "bsonType": "object",
+    "required": [
+      "_id",
+      "area_id",
+      "brand",
+      "created_at",
+      "model",
+      "name",
+      "type",
+      "updated_at",
+      "zone_id"
+    ],
+    "properties": {
+      "_id": {
+        "bsonType": "objectId"
+      },
+      "area_id": {
+        "bsonType": "objectId"
+      },
+      "brand": {
+        "bsonType": "string"
+      },
+      "created_at": {
+        "bsonType": "date"
+      },
+      "model": {
+        "bsonType": "string"
+      },
+      "name": {
+        "bsonType": "string"
+      },
+      "type": {
+        "bsonType": "array",
+        "items": {
+          "bsonType": "string"
+        }
+      },
+      "updated_at": {
+        "bsonType": "date"
+      },
+      "zone_id": {
+        "bsonType": "objectId"
+      }
+    }
+  }
+}

@@ -1,0 +1,43 @@
+{
+  "$jsonSchema": {
+    "bsonType": "object",
+    "required": [
+      "_id",
+      "sensor_id",
+      "timestamp",
+      "values"
+    ],
+    "properties": {
+      "_id": {
+        "bsonType": "objectId"
+      },
+      "sensor_id": {
+        "bsonType": "objectId"
+      },
+      "timestamp": {
+        "bsonType": "date"
+      },
+      "values": {
+        "bsonType": "array",
+        "items": {
+          "bsonType": "object",
+          "properties": {
+            "type": {
+              "bsonType": "string"
+            },
+            "value": {
+              "bsonType": [
+                "int",
+                "double"
+              ]
+            }
+          },
+          "required": [
+            "type",
+            "value"
+          ]
+        }
+      }
+    }
+  }
+}

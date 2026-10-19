@@ -1,0 +1,96 @@
+{
+  "$jsonSchema": {
+    "bsonType": "object",
+    "required": [
+      "_id",
+      "areas",
+      "created_at",
+      "description",
+      "name",
+      "status",
+      "updated_at"
+    ],
+    "properties": {
+      "_id": {
+        "bsonType": "objectId"
+      },
+      "areas": {
+        "bsonType": "array",
+        "items": {
+          "bsonType": "object",
+          "properties": {
+            "id": {
+              "bsonType": "objectId"
+            },
+            "name": {
+              "bsonType": "string"
+            },
+            "status": {
+              "bsonType": "string"
+            },
+            "target_conditions": {
+              "bsonType": "object",
+              "properties": {
+                "humidity": {
+                  "bsonType": "object",
+                  "properties": {
+                    "max": {
+                      "bsonType": "int"
+                    },
+                    "min": {
+                      "bsonType": "int"
+                    }
+                  },
+                  "required": [
+                    "max",
+                    "min"
+                  ]
+                },
+                "temperature": {
+                  "bsonType": "object",
+                  "properties": {
+                    "max": {
+                      "bsonType": "int"
+                    },
+                    "min": {
+                      "bsonType": "int"
+                    }
+                  },
+                  "required": [
+                    "max",
+                    "min"
+                  ]
+                }
+              },
+              "required": [
+                "humidity",
+                "temperature"
+              ]
+            }
+          },
+          "required": [
+            "id",
+            "name",
+            "status",
+            "target_conditions"
+          ]
+        }
+      },
+      "created_at": {
+        "bsonType": "date"
+      },
+      "description": {
+        "bsonType": "string"
+      },
+      "name": {
+        "bsonType": "string"
+      },
+      "status": {
+        "bsonType": "string"
+      },
+      "updated_at": {
+        "bsonType": "date"
+      }
+    }
+  }
+}
