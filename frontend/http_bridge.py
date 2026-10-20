@@ -266,5 +266,5 @@ if __name__ == "__main__":
     parser.add_argument("--address", default="127.0.0.1")
     parser.add_argument("--port", type=int, default=8501)
     parser.add_argument("--streamlit-port", type=int, default=8502)
-    parser.add_argument("--app", default="streamlit_example.py")
+    parser.add_argument("--app", default="app.py")
     asyncio.run(run(parser.parse_args()))
