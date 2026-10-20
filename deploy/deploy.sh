@@ -21,7 +21,10 @@ failed() {
 trap failed ERR
 for attempt in {1..30}; do
     if curl --max-time 3 -fsS http://127.0.0.1:15125/_stcore/health >/dev/null &&
-       curl --max-time 3 -fsS http://127.0.0.1:15125/api/v1/health >/dev/null; then
+       curl --max-time 3 -fsS http://127.0.0.1:15125/api/v1/health >/dev/null &&
+       curl --max-time 3 -fsS -X POST http://127.0.0.1:15125/_greenhouse_transport/session \
+           -H 'Content-Type: application/json' -H 'X-Greenhouse-Transport: 1' \
+           --data '{"protocols":[]}' >/dev/null; then
         curl --max-time 5 -fsS http://127.0.0.1:15125/ | /usr/bin/python3 -c '
 import sys
 assert "/_greenhouse_transport/adapter.js" in sys.stdin.read(), "HTTP transport adapter missing"
