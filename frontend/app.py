@@ -44,7 +44,7 @@ data = pd.DataFrame({
 })
 
 
-if option_map[selection] == "One":
+if selection is not None and option_map[selection] == "One":
     st.line_chart(data)
 else:
     st.write("No data available for display")
