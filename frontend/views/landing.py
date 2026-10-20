@@ -1,0 +1,50 @@
+import streamlit as st
+import pandas as pd    # for data manipulation and analysis
+import numpy as np
+st.title("Greenhouse-Alpha")
+
+# This is a home page.Will have one line graph with temp and humidity in the middle 
+# Buttons that will change the graph based on what zone the user wants to see.
+
+st.page_link("views/dashboard.py", label="Go to Dashboard")
+st.page_link("views/alert.py", label="Go to Alerts")
+st.page_link("views/settings.py", label="Go to Settings")
+
+
+option_map = { 
+    0: "One",
+    1: "Two",
+    2: "Three",
+    3: "Four",
+}
+
+# Segmented control for zone selection
+
+selection = st.segmented_control(
+    "Zones",
+    options = option_map.keys(),        
+    format_func = lambda option: option_map[option], # Function to display the zone names instead of keys
+    selection_mode = "single",
+)
+st.write(
+    "Your selected zone: "
+    f"{None if selection is None else option_map[selection]}"
+)
+#-------------- Line chart Displaying Temperature & Humidity -------------------
+
+# This is just an example of how I want to display the data for different zones
+
+data = pd.DataFrame({
+    'x': np.arange(0, 10, 1),
+    'y': np.random.randn(10)
+})
+
+
+if selection is not None and option_map[selection] == "One":
+    st.line_chart(data)
+else:
+    st.write("No data available for display")
+
+#-------------------- Handling HTTP Requests to the API --------------------
+
+
