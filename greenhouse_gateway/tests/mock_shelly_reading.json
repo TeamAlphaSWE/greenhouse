@@ -1,0 +1,75 @@
+{
+    "src": "shellyhtg3-e4b3233085e8",
+    "dst": "greenhouse-ht1/events",
+    "method": "NotifyFullStatus",
+    "params": {
+        "ts": 1791426359.23,
+        "ble": {},
+        "cloud": {
+            "connected": false
+        },
+        "devicepower:0": {
+            "id": 0,
+            "battery": {
+                "V": 5.33,
+                "percent": 66
+            },
+            "external": {
+                "present": false
+            }
+        },
+        "ht_ui": {},
+        "humidity:0": {
+            "id": 0,
+            "rh": 45.9
+        },
+        "matter": {
+            "num_fabrics": 0,
+            "commissionable": false
+        },
+        "mqtt": {
+            "connected": true
+        },
+        "sys": {
+            "mac": "E4B3233085E8",
+            "restart_required": false,
+            "time": null,
+            "unixtime": null,
+            "last_sync_ts": null,
+            "uptime": 0,
+            "ram_size": 273728,
+            "ram_free": 171780,
+            "ram_min_free": 168528,
+            "fs_size": 1048576,
+            "fs_free": 684032,
+            "cfg_rev": 27,
+            "kvs_rev": 0,
+            "webhook_rev": 0,
+            "available_updates": {},
+            "wakeup_reason": {
+                "boot": "deepsleep_wake",
+                "cause": "button"
+            },
+            "wakeup_period": 7200,
+            "reset_reason": 8,
+            "utc_offset": -14400
+        },
+        "temperature:0": {
+            "id": 0,
+            "tC": 24.4,
+            "tF": 75.8
+        },
+        "wifi": {
+            "sta_ip": "10.42.0.190",
+            "status": "got ip",
+            "ssid": "ASUS",
+            "channel": 9,
+            "rssi": -79,
+            "bssid": "54:a0:50:58:0d:18",
+            "sta_ip6": null
+        },
+        "ws": {
+            "connected": false
+        }
+    }
+}

@@ -1,0 +1,76 @@
+name: Test and deploy
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    strategy:
+      matrix:
+        python: ['3.9', '3.10', '3.12']
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+      - name: Install test dependencies
+        run: python -m pip install -r backend/requirements.txt
+      - name: Test backend
+        run: python -m pytest backend
+      - name: Validate deployment files
+        run: |
+          bash -n deploy/deploy.sh
+          sh -n deploy/install-http-bridge.sh
+          node --check frontend/http_transport.js
+
+  deploy:
+    needs: test
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    concurrency:
+      group: greenhouse-production
+      cancel-in-progress: false
+    env:
+      DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+      DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+      DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Configure SSH
+        shell: bash
+        run: |
+          set -euo pipefail
+          : "${DEPLOY_HOST:?Missing DEPLOY_HOST secret}"
+          : "${DEPLOY_USER:?Missing DEPLOY_USER secret}"
+          : "${DEPLOY_SSH_KEY:?Missing DEPLOY_SSH_KEY secret}"
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$DEPLOY_SSH_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          ssh-keyscan -T 15 -H "$DEPLOY_HOST" >> ~/.ssh/known_hosts
+      - name: Transfer the tested commit and deploy
+        shell: bash
+        run: |
+          set -euo pipefail
+          target="$DEPLOY_USER@$DEPLOY_HOST"
+          ssh -o BatchMode=yes -o ConnectTimeout=15 "$target" 'mkdir -p ~/app && python3 -' <<'PY'
+          import shutil
+          from pathlib import Path
+          assert shutil.disk_usage(Path.home()).free >= 5 * 1024 * 1024, "Server disk is full; deployment stopped before copying files"
+          PY
+          # An archive of the commit avoids git-pull conflicts with the initial manual install.
+          # .env, .git, caches and other server-only files are never in this archive.
+          git archive --format=tar HEAD | gzip -n | ssh -o BatchMode=yes "$target" 'tar -xzf - -C ~/app'
+          ssh -o BatchMode=yes "$target" 'cd ~/app && bash deploy/deploy.sh'
+      - name: Verify public Streamlit rendering
+        run: |
+          python -m pip install playwright
+          python -m playwright install --with-deps chromium
+          python deploy/check-public-frontend.py https://greenhouse.kentcs.org

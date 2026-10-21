@@ -1,0 +1,183 @@
+# Greenhouse Backend
+
+Flask backend API for the Greenhouse application.
+
+## Project Structure
+
+```text
+backend/
+├── app/
+│   ├── __init__.py
+│   ├── config.py
+│   ├── db.py
+│   ├── json.py
+│   ├── repository.py
+│   ├── repositories/
+│   │   └── __init__.py
+│   └── routes/
+│       ├── __init__.py
+│       └── health.py
+├── tests/
+│   ├── conftest.py
+│   ├── test_db.py
+│   ├── test_health.py
+│   └── test_repository.py
+├── requirements.txt
+└── README.md
+```
+
+## Setup
+
+From the repository root, activate the project virtual environment:
+
+Create a virtual environment:
+
+```bash
+python3 -m venv .venv
+```
+
+Activate the virtual environment:
+
+```bash
+source .venv/bin/activate
+```
+
+Install the backend dependencies:
+
+```bash
+pip install -r backend/requirements.txt
+```
+
+## Configuration
+
+The backend reads its settings from environment variables. When started through the Flask CLI (`flask run` or `make run`), variables in the repository's `.env` file are loaded automatically; copy `.env.example` to `.env` to get started.
+
+| Variable | Default | Description |
+| --- | --- | --- |
+| `MONGO_URI` | `mongodb://localhost:27017` | MongoDB connection string |
+| `MONGO_DB_NAME` | `year2_greenhouse_db` | Database used by the app |
+| `MONGO_SERVER_SELECTION_TIMEOUT_MS` | `5000` | How long a query waits for a reachable server before failing |
+
+## Running the Backend
+
+From the `backend` directory:
+
+```bash
+flask --app app run --debug
+```
+
+By default, the Flask API will be available at:
+
+```text
+http://localhost:5000
+```
+
+## API
+
+### Health Check
+
+Used to verify that the backend is running and available.
+
+```http
+GET /api/v1/health
+```
+
+Response:
+
+```json
+{
+  "status": "ok"
+}
+```
+### Sensor Data
+
+| Method | Path | Body | Response |
+| --- | --- | --- | --- |
+| `GET` | `/api/v1/sensor_data/<sensor_id>` | | `200` list of readings, `400` invalid id |
+| `POST` | `/api/v1/sensor_data` | see below | `201` `{"sensor_data": {"id": "..."}}`, `400` invalid body |
+
+```json
+{
+  "sensor_id": "6ac430e14eb645800db1771f",
+  "values": [
+    {"type": "temperature", "value": 23.4},
+    {"type": "humidity", "value": 45.9},
+    {"type": "battery", "value": 66}
+  ]
+}
+```
+
+`sensor_id` is the MongoDB id of the sensor. The server adds the timestamp.
+
+## Database Access
+
+The app creates one `MongoClient` at startup (`app/db.py`) and shares it across all requests; PyMongo pools connections internally, so no per-request setup or teardown is needed.
+
+### Repositories
+
+Data access goes through a repository per collection, kept in `app/repositories/`. Subclass `Repository` (`app/repository.py`), set the collection name, and add any domain-specific queries:
+
+```python
+from app.repository import Repository
+
+
+class ZoneRepository(Repository):
+    collection_name = "zones"
+
+    def find_by_kind(self, kind):
+        return self.find({"kind": kind})
+
+
+zones = ZoneRepository()
+```
+
+Every repository provides `find(filter)`, `find_one(filter)`, `get(id)`, `create(data)`, `update(id, changes)` and `delete(id)`. Documents come back as plain dicts with a string `id` in place of Mongo's `_id: ObjectId`, and ids are passed in as strings. `get`, `update` and `delete` treat a malformed id like a missing document (`None` / `False`), so route handlers never touch BSON types:
+
+```python
+@bp.get("/zones/<zone_id>")
+def show(zone_id):
+    zone = zones.get(zone_id)
+    if zone is None:
+        abort(404)
+    return jsonify(zone)
+```
+
+For queries the base class doesn't cover (aggregations, bulk writes), use `self.collection` inside the repository to reach the PyMongo collection directly.
+
+The app also registers a JSON provider (`app/json.py`) that serializes `ObjectId` values as strings, so documents with ObjectId references can be passed to `jsonify` as-is.
+
+### Lower-level helpers
+
+`app.db` exposes the underlying objects if you need them: `get_collection(name)`, `get_db()`, `get_client()` (e.g. for transactions) and `ping()`.
+
+The client connects lazily, so the app starts even when MongoDB is not running; queries will fail after `MONGO_SERVER_SELECTION_TIMEOUT_MS`.
+
+Tests do not need a running MongoDB: the `app` fixture in `tests/conftest.py` injects an in-memory [mongomock](https://github.com/mongomock/mongomock) client through the `MONGO_CLIENT` config key.
+
+```python
+def test_something(app):
+    with app.app_context():
+        zones.create({"name": "Zone A"})
+```
+
+## Running Tests
+
+From the `backend` directory with the virtual environment active:
+
+```bash
+pytest
+```
+
+To run tests with additional output:
+
+```bash
+pytest -v
+```
+
+## Development
+
+The backend uses Flask's application factory pattern. The application is created by `create_app()` in `app/__init__.py`.
+
+API routes should be organized using Flask Blueprints under `app/routes/`.
+
+As the backend grows, additional services, integrations, and data access code should be organized within the `app/` package rather than placed directly in route handlers. Data access code should live in `Repository` subclasses rather than creating its own `MongoClient` or calling PyMongo from route handlers.
