@@ -1,6 +1,8 @@
 import streamlit as st
 import pandas as pd    # for data manipulation and analysis
 import numpy as np     # for numerical operations
+import requests        # for making HTTP requests to the Flask local server
+
 
 
 # Pandas and Numpy are a packaged deal since Pandas relies on Numpy for numerical operations!!
@@ -8,7 +10,7 @@ import numpy as np     # for numerical operations
 
 # -------------------- Multi Selection for Different Zones -------------------
 
-st.title("Greenhouse-Alpha")
+
 
 # This is a home page.Will have one line graph with temp and humidity in the middle 
 # Buttons that will change the graph based on what zone the user wants to see.
