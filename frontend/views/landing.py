@@ -1,6 +1,13 @@
 import streamlit as st
 import pandas as pd    # for data manipulation and analysis
-import numpy as np
+import numpy as np     # for numerical operations
+
+
+# Pandas and Numpy are a packaged deal since Pandas relies on Numpy for numerical operations!!
+# let work on a dashboard!
+
+# -------------------- Multi Selection for Different Zones -------------------
+
 st.title("Greenhouse-Alpha")
 
 # This is a home page.Will have one line graph with temp and humidity in the middle 
@@ -10,6 +17,8 @@ st.page_link("views/dashboard.py", label="Go to Dashboard")
 st.page_link("views/alert.py", label="Go to Alerts")
 st.page_link("views/settings.py", label="Go to Settings")
 
+
+# Mapping of option keys to zone names
 
 option_map = { 
     0: "One",
@@ -30,6 +39,7 @@ st.write(
     "Your selected zone: "
     f"{None if selection is None else option_map[selection]}"
 )
+
 #-------------- Line chart Displaying Temperature & Humidity -------------------
 
 # This is just an example of how I want to display the data for different zones
