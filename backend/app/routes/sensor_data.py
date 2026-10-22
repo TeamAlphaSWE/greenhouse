@@ -1,6 +1,7 @@
 from flask import Blueprint, current_app, jsonify, request
 from pymongo.errors import PyMongoError
 from app.repositories.sensor_data import sensor_data as sensor_data_repository
+from app.repositories.sensors import sensors as sensor_repository
 
 sensor_data = Blueprint("sensor_data", __name__, url_prefix="/api/v1/sensor_data")
 
@@ -34,7 +35,10 @@ def create_sensor_data():
     values = [{"type": v["type"], "value": v["value"]} for v in data["values"]]
 
     try:
-        reading = sensor_data_repository.create_reading(data["sensor_id"], values)
+        sensor = sensor_repository.find_by_hardware_id(data["hardware_id"])
+        if sensor is None:
+            sensor = sensor_repository.create_pending(data["hardware_id"])
+        reading = sensor_data_repository.create_reading(sensor["id"], values)
     except PyMongoError:
         current_app.logger.exception("Failed to save sensor data")
         return jsonify({"error": "Unexpected server error"}), 500
@@ -43,9 +47,9 @@ def create_sensor_data():
 
 
 def _validate_reading(data):
-    sensor_id = data.get("sensor_id")
-    if not isinstance(sensor_id, str) or sensor_data_repository._to_object_id(sensor_id) is None:
-        return "sensor_id is required and must be a valid id"
+    hardware_id = data.get("hardware_id")
+    if not isinstance(hardware_id, str) or not hardware_id:
+        return "hardware_id is required"
 
     values = data.get("values")
     if not isinstance(values, list) or not values:
