@@ -6,6 +6,7 @@
     "area_id",
     "brand",
     "created_at",
+    "hardware_id",
     "model",
     "name",
     "type",
@@ -24,6 +25,9 @@
     },
     "created_at": {
       "$ref": "#/$defs/Date"
+    },
+    "hardware_id": {
+      "type": "string"
     },
     "model": {
       "type": "string"
