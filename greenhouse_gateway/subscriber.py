@@ -3,9 +3,9 @@
 # WHAT THIS FILE DOES:
 #   Shelly sensors send their readings to Mosquitto (the MQTT broker running on greenhouse MacBook).
 #   This script connects to Mosquitto, listens for those readings, pulls out the values we
-#   care about, and prints each reading.
+#   care about, normalizes values, builds a payload, and posts to backend api to handle
 
-from config import MQTT_HOST, MQTT_PORT, BACKEND_URL, SENSOR_IDS
+from config import MQTT_HOST, MQTT_PORT, BACKEND_URL
 import json
 from datetime import datetime, timezone       
 import paho.mqtt.client as mqtt             # type: ignore
@@ -17,39 +17,30 @@ logger = logging.getLogger(__name__)
 REQUEST_TIMEOUT = 5
 MEASUREMENTS = ("temperature", "humidity", "battery")
 
-#input -> dict returned by normalize() 
-def build_payload(reading, sensor_oid):
+# input -> dict returned by normalize() 
+def build_payload(reading):
     values = []
     for key in MEASUREMENTS:
         value = reading.get(key)
-        #skips adding anything with incorrect types or no value 
+        # skips adding anything with incorrect types or no value 
         if isinstance(value, bool) or not isinstance(value, (int, float)):
             continue
-        values.append({"type":key, "value": value})
+        values.append({"type": key, "value": value})
 
-    #skips empty readings from building payload
+    # skips empty readings from building payload
     if not values:
         return None
     
     return {
-        "sensor_id": sensor_oid,
+        "hardware_id": reading["hardware_id"],
         "values": values,
     }
 
-def resolve_sensor_id(mac):
-    sensor_oid = SENSOR_IDS.get(mac)
-    if sensor_oid is None:
-        logger.warning("No sensor registered for %s", mac)
-    return sensor_oid
     
 def post_reading(reading):
-    sensor_oid = resolve_sensor_id(reading["mac"])
-    if sensor_oid is None:
-        return #sensor object id not logged in greenhouse_gateway/config.py
-    
-    payload = build_payload(reading, sensor_oid)
+    payload = build_payload(reading)
     if payload is None:
-        logger.warning("No usable values in reading from %s", reading["mac"])
+        logger.warning("No usable values in reading from %s", reading["hardware_id"])
         return
     
     try:
@@ -60,17 +51,18 @@ def post_reading(reading):
     
     if response.status_code == 201:
         logger.info("Saved reading %s for sensor %s",
-                    response.json()["sensor_data"]["id"], sensor_oid)
+                    response.json()["sensor_data"]["id"], reading["hardware_id"])
     elif response.status_code == 400:
         logger.error("Backend rejected payload %s: %s", payload, response.text)
     else:
         logger.error("Backend error %s: %s", response.status_code, response.text)
 
+
 def normalize(data):
     # All the sensor values live under "params"
     p = data["params"]
     return {
-        "mac": data["src"], #based on device MAC address -> guaranteed to be unique
+        "hardware_id": data["src"], # based on device MAC -> guaranteed to be unique
         "temperature": p.get("temperature:0", {}).get("tC"),
         "humidity": p.get("humidity:0", {}).get("rh"),
         "battery": p.get("devicepower:0", {}).get("battery", {}).get("percent"),
@@ -122,11 +114,10 @@ def on_message(client, userdata, msg):
         # reading variable below will eventually be sent to api
         reading = normalize(data)
         post_reading(reading)
-        print(reading)
 
     # Exception catches any error and then prints out error message
-    except Exception as e:
-        print("skipped:", e)
+    except Exception:
+        logger.exception("Failed to handle message on %s", msg.topic)
 
 
 if __name__ == "__main__":
@@ -149,5 +140,5 @@ if __name__ == "__main__":
     try:
         client.loop_forever()
     except KeyboardInterrupt:
-        #exit gracefully
+        # exit gracefully
         client.disconnect()
