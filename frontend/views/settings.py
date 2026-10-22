@@ -7,7 +7,6 @@ st.set_page_config(
     layout="wide"
 )
 
-st.title("⚙️ Settings")
 st.caption("Manage greenhouse preferences and alert settings.")
 
 st.divider()
