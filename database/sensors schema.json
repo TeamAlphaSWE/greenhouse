@@ -3,15 +3,10 @@
   "type": "object",
   "required": [
     "_id",
-    "area_id",
-    "brand",
     "created_at",
     "hardware_id",
-    "model",
-    "name",
-    "type",
-    "updated_at",
-    "zone_id"
+    "status",
+    "updated_at"
   ],
   "properties": {
     "_id": {
@@ -35,6 +30,10 @@
     "name": {
       "type": "string"
     },
+    "status": {
+      "type": "string",
+      "enum": ["pending", "active"]
+    },
     "type": {
       "type": "array",
       "items": {
@@ -47,6 +46,19 @@
     "zone_id": {
       "$ref": "#/$defs/ObjectId"
     }
+  },
+  "if": {
+    "properties": {
+      "status": {
+        "const": "active"
+      }
+    }
+  },
+  "then": {
+    "required": [
+      "area_id",
+      "zone_id"
+    ]
   },
   "$defs": {
     "ObjectId": {

@@ -4,6 +4,7 @@ import pytest
 
 from app.db import get_collection
 from app.repositories.sensor_data import sensor_data
+from app.repositories.sensors import sensors
 
 
 def test_list_sensor_data_empty(client):
@@ -68,7 +69,7 @@ def test_list_sensor_data_database_error_returns_500(client, monkeypatch):
     
 def valid_reading(**overrides):
     body = {
-        "sensor_id": str(ObjectId()),
+        "hardware_id": "shellyhtg3-e4b3233085e8",
         "values": [
             {"type": "temperature", "value": 23.4},
             {"type": "humidity", "value": 50},
@@ -79,7 +80,7 @@ def valid_reading(**overrides):
     return body
 
 
-def test_create_sensor_data(app, client):
+def test_create_sensor_data_creates_pending_sensor_for_unknown_hardware_id(app, client):
     body = valid_reading()
 
     response = client.post("/api/v1/sensor_data", json=body)
@@ -88,11 +89,40 @@ def test_create_sensor_data(app, client):
     reading_id = response.get_json()["sensor_data"]["id"]
 
     with app.app_context():
-        doc = get_collection("sensor_data").find_one({"_id": ObjectId(reading_id)})
+        reading = get_collection("sensor_data").find_one({"_id": ObjectId(reading_id)})
+        sensor = get_collection("sensors").find_one({"hardware_id": body["hardware_id"]})
 
-    assert doc["sensor_id"] == ObjectId(body["sensor_id"])
-    assert doc["values"] == body["values"]
-    assert "timestamp" in doc
+    assert sensor is not None
+    assert sensor["status"] == "pending"
+    assert "zone_id" not in sensor
+    assert "area_id" not in sensor
+    assert reading["sensor_id"] == sensor["_id"]
+    assert reading["values"] == body["values"]
+    assert "timestamp" in reading
+
+
+def test_create_sensor_data_reuses_existing_sensor_for_known_hardware_id(app, client):
+    body = valid_reading()
+
+    with app.app_context():
+        sensor_id = sensors.create({
+            "hardware_id": body["hardware_id"],
+            "status": "active",
+            "zone_id": ObjectId(),
+            "area_id": ObjectId(),
+        })["id"]
+
+    response = client.post("/api/v1/sensor_data", json=body)
+
+    assert response.status_code == 201
+    reading_id = response.get_json()["sensor_data"]["id"]
+
+    with app.app_context():
+        reading = get_collection("sensor_data").find_one({"_id": ObjectId(reading_id)})
+        sensor_count = get_collection("sensors").count_documents({"hardware_id": body["hardware_id"]})
+
+    assert sensor_count == 1
+    assert str(reading["sensor_id"]) == sensor_id
 
 
 def test_create_sensor_data_saves_only_expected_fields(app, client):
@@ -119,8 +149,8 @@ def test_create_sensor_data_invalid_json_returns_400(client):
 
 
 @pytest.mark.parametrize("body", [
-    valid_reading(sensor_id=None),
-    valid_reading(sensor_id="not-an-id"),
+    valid_reading(hardware_id=None),
+    valid_reading(hardware_id=""),
     valid_reading(values=None),
     valid_reading(values=[]),
     valid_reading(values=["temperature"]),
