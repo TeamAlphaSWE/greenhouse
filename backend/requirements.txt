@@ -3,3 +3,5 @@ pymongo
 python-dotenv
 pytest
 mongomock
+itsdangerous
+werkzeug
