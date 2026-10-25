@@ -61,7 +61,8 @@ def update_dashboard():
     chart_data = pd.DataFrame(chart_rows) #converting rows in Dataframe to manipulate
 
     if chart_data.empty:
-                st.write("No sensor data available.")
+        st.write("No sensor data available.")
+        return
 
     chart_data["Date"] = pd.to_datetime(chart_data["Date"])# turning the JSON timestamp into a datetime object
     chart_data = chart_data.sort_values(by="Date")         # Sorting the chart data by Time for proper visualization
