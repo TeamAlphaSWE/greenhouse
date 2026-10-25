@@ -25,29 +25,50 @@ st.write("-----------------------------------------------")
 
 #-------------------- Handling Real-Time Update Functionality --------------------
 
+BACKEND_URL = "https://greenhouse.kentcs.org"
+
+
 @st.fragment(run_every = "10s")     #refresh the dashboard every 10 seconds
 def update_dashboard():
 
-# INFO we are only pulling from the first sensor.... I need to undo the hardcoding for this laterrrrrr....next PR
-    BASE_URL3 = "https://greenhouse.kentcs.org/api/v1/sensor_data/6ac430e14eb645800db1771f"
-    response_sensor_data = requests.get(BASE_URL3)
+    sensors_response = requests.get(f"{BACKEND_URL}/api/v1/sensors")
+    sensors_response.raise_for_status()
+    sensors = sensors_response.json().get("sensors", [])
+
+    if not sensors:
+        st.write("No sensors available.")
+        return
+
+    sensor_options = {s["id"]: s.get("name") or s["hardware_id"] for s in sensors}
+
+    selected_id = st.segmented_control(
+        "Select a sensor",
+        options = list(sensor_options.keys()),
+        format_func = lambda sensor_id: sensor_options[sensor_id],
+        selection_mode = "single",
+        default = next(iter(sensor_options)),
+    )
+
+    if selected_id is None:
+        st.write("Select a sensor to view its data.")
+        return
+
+    response_sensor_data = requests.get(f"{BACKEND_URL}/api/v1/sensor_data/{selected_id}")
     response_sensor_data.raise_for_status()
     sensor_data = response_sensor_data.json()
-    record = sensor_data.get("sensor_data", [])      # Getting the all the records of sensor data from the response    # getting the time stamp outside of value array base don JSON 
+    record = sensor_data.get("sensor_data", [])      # Getting the all the records of sensor data from the response
     chart_rows = []                                  # To store the previous data points for the chart
 
-
-
-# Storing the data into a dict for easier access and manipulation
+    # Storing the data into a dict for easier access and manipulation
     for records in record:
         dictionary = {}
         timestamp = records.get("timestamp")  # getting the timestamp inside the for loop
-    
+
         for id in records.get("values", []):
             dictionary[id["type"]] = id["value"] # for the id var in dictionary, store the value based on the word type defined in the sensor_data response
 
         temperature_data = dictionary.get("temperature")  # Getting the values of the response for temperature
-        humidity_data = dictionary.get("humidity")        # Gettting the value for the response for humidity 
+        humidity_data = dictionary.get("humidity")        # Gettting the value for the response for humidity
 
         # Making a row for the chart data to visualize and connect points after updating
 
@@ -56,7 +77,6 @@ def update_dashboard():
             "Humidity": humidity_data,
             "Date": timestamp
         })
-
 
     chart_data = pd.DataFrame(chart_rows) #converting rows in Dataframe to manipulate
 
@@ -67,37 +87,10 @@ def update_dashboard():
     chart_data["Date"] = pd.to_datetime(chart_data["Date"])# turning the JSON timestamp into a datetime object
     chart_data = chart_data.sort_values(by="Date")         # Sorting the chart data by Time for proper visualization
 
-    
-        
-
-#-------------- Line chart Displaying Temperature & Humidity for different Zones -------------------
-
-    option_map = {
-        0: "Zone 1",
-        1: "Zone 2",
-        2: "Zone 3",
-        3: "Zone 4",
-    }
-
-    selection = st.segmented_control(
-        "Select a zone",
-        options = option_map.keys(),
-        format_func = lambda option: option_map[option],
-        selection_mode="single",
-    )
-    st.write(
-        
-        f"{None if selection is None else option_map[selection]}"
-    )
+#-------------- Line chart Displaying Temperature & Humidity for the selected sensor -------------------
 
     st.subheader("Temperature & Humidity Over Time")
+    st.line_chart(chart_data, x="Date", y=["Temperature", "Humidity"])
 
-    if selection is not None and option_map[selection] == "Zone 1" or selection is None:
-        st.line_chart(chart_data, x="Date", y=["Temperature", "Humidity"])
-    else:
-        if selection is None and option_map[0] != "Zone 1" or selection is not None and option_map[selection] != "Zone 1":
-            st.write("No data available for the selected zone")
 
-        
-        
 update_dashboard()
