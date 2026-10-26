@@ -15,9 +15,6 @@ import requests        # for making HTTP requests to the Flask local server
 # This is a home page.Will have one line graph with temp and humidity in the middle 
 # Buttons that will change the graph based on what zone the user wants to see.
 
-st.page_link("views/dashboard.py", label="Go to Dashboard")
-st.page_link("views/alert.py", label="Go to Alerts")
-st.page_link("views/settings.py", label="Go to Settings")
 
 
 st.title("Greenhouse Dashboard")
