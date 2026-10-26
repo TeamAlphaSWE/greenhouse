@@ -57,6 +57,7 @@ The backend reads its settings from environment variables. When started through 
 | `MONGO_URI` | `mongodb://localhost:27017` | MongoDB connection string |
 | `MONGO_DB_NAME` | `year2_greenhouse_db` | Database used by the app |
 | `MONGO_SERVER_SELECTION_TIMEOUT_MS` | `5000` | How long a query waits for a reachable server before failing |
+| `SECRET_KEY` | `dev-secret-key-change-me` | Signs auth tokens; set a real random value outside local dev |
 
 ## Running the Backend
 
@@ -89,6 +90,21 @@ Response:
   "status": "ok"
 }
 ```
+### Auth
+
+| Method | Path | Body | Response |
+| --- | --- | --- | --- |
+| `POST` | `/api/v1/login` | `{"username", "password"}` | `200` `{"token": "..."}`, `401` invalid credentials |
+
+```json
+{
+  "username": "alice",
+  "password": "hunter2"
+}
+```
+
+Send the returned token as `Authorization: Bearer <token>` on any endpoint that requires it.
+
 ### Sensor Data
 
 | Method | Path | Body | Response |
