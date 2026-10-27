@@ -1,0 +1,42 @@
+name: Discord Open PR Digest
+
+on:
+  schedule:
+    - cron: "0 13 * * 1-5"   # weekdays, 9am ET
+  workflow_dispatch: {}
+
+jobs:
+  digest:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/github-script@v7
+        with:
+          script: |
+            const { data: prs } = await github.rest.pulls.list({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              state: 'open',
+            });
+
+            const now = Date.now();
+            const dayMs = 24 * 60 * 60 * 1000;
+
+            const description = prs.length === 0
+              ? "No open PRs."
+              : prs
+                  .sort((a, b) => new Date(a.created_at) - new Date(b.created_at))
+                  .map(pr => {
+                    const days = Math.floor((now - new Date(pr.created_at)) / dayMs);
+                    return `[#${pr.number}](${pr.html_url}) ${pr.title}, ${days}d open (${pr.user.login})`;
+                  })
+                  .join('\n');
+
+            await fetch(process.env.WEBHOOK_URL, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                embeds: [{ title: `Open PRs (${prs.length})`, description, color: 3066993 }],
+              }),
+            });
+        env:
+          WEBHOOK_URL: ${{ secrets.PRS_DISCORD_WEBHOOK }}
