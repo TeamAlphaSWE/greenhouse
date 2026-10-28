@@ -2,30 +2,6 @@
 
 Flask backend API for the Greenhouse application.
 
-## Project Structure
-
-```text
-backend/
-├── app/
-│   ├── __init__.py
-│   ├── config.py
-│   ├── db.py
-│   ├── json.py
-│   ├── repository.py
-│   ├── repositories/
-│   │   └── __init__.py
-│   └── routes/
-│       ├── __init__.py
-│       └── health.py
-├── tests/
-│   ├── conftest.py
-│   ├── test_db.py
-│   ├── test_health.py
-│   └── test_repository.py
-├── requirements.txt
-└── README.md
-```
-
 ## Setup
 
 From the repository root, activate the project virtual environment:
@@ -123,7 +99,29 @@ Send the returned token as `Authorization: Bearer <token>` on any endpoint that 
 }
 ```
 
-`sensor_id` is the MongoDB id of the sensor. The server adds the timestamp.
+`sensor_id` is the MongoDB id of the sensor. The server adds the timestamp. An unrecognized `hardware_id` auto-creates a `pending` sensor; the reading is still saved.
+
+### Sensors
+
+| Method | Path | Body | Response |
+| --- | --- | --- | --- |
+| `GET` | `/api/v1/sensors` | | `200` `{"sensors": [...], "total": n}` |
+| `PATCH` | `/api/v1/sensors/<id>` | `{"name", "area_id"}` | `200` updated sensor, `400` invalid input, `404` unknown id |
+
+```json
+{
+  "name": "Flower Bed 1",
+  "area_id": "6ac430e14eb645800db1772a"
+}
+```
+
+Activates a `pending` sensor: sets `name` and `area_id`, derives `zone_id` server-side from whichever zone owns that area, and flips `status` to `active`. Only `area_id` is accepted; `zone_id` is never client input.
+
+### Zones
+
+| Method | Path | Body | Response |
+| --- | --- | --- | --- |
+| `GET` | `/api/v1/zones` | | `200` `{"zones": [...], "total": n}` |
 
 ## Database Access
 
