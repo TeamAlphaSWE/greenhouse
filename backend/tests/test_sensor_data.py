@@ -176,3 +176,118 @@ def test_create_sensor_data_database_error_returns_500(client, monkeypatch):
 
     assert response.status_code == 500
     assert response.get_json() == {"error": "Unexpected server error"}
+
+
+def _active_sensor_in_area(app, hardware_id):
+    area_id = ObjectId()
+
+    with app.app_context():
+        get_collection("zones").insert_one({
+            "name": "Zone 1",
+            "description": "Test zone",
+            "status": "active",
+            "areas": [{
+                "id": area_id,
+                "name": "Area 1",
+                "status": "active",
+                "target_conditions": {
+                    "humidity": {"min": 40, "max": 60},
+                    "temperature": {"min": 18, "max": 26},
+                },
+            }],
+        })
+        sensor_id = sensors.create({
+            "hardware_id": hardware_id,
+            "status": "active",
+            "area_id": area_id,
+            "zone_id": ObjectId(),
+        })["id"]
+
+    return sensor_id, area_id
+
+
+def test_create_sensor_data_creates_alert_for_out_of_range_value(app, client):
+    body = valid_reading()
+    sensor_id, area_id = _active_sensor_in_area(app, body["hardware_id"])
+    body["values"] = [{"type": "temperature", "value": 32.0}]
+
+    response = client.post("/api/v1/sensor_data", json=body)
+
+    assert response.status_code == 201
+
+    with app.app_context():
+        alert = get_collection("alerts").find_one({"sensor_id": ObjectId(sensor_id)})
+
+    assert alert is not None
+    assert alert["type"] == "temperature"
+    assert alert["value"] == 32.0
+    assert alert["area_id"] == area_id
+    assert "zone_id" in alert
+    assert "message" in alert
+    assert "created_at" in alert
+
+
+def test_create_sensor_data_no_alert_for_in_range_value(app, client):
+    body = valid_reading()
+    sensor_id, _ = _active_sensor_in_area(app, body["hardware_id"])
+    body["values"] = [{"type": "temperature", "value": 22.0}]
+
+    response = client.post("/api/v1/sensor_data", json=body)
+
+    assert response.status_code == 201
+
+    with app.app_context():
+        alert_count = get_collection("alerts").count_documents({"sensor_id": ObjectId(sensor_id)})
+
+    assert alert_count == 0
+
+
+def test_create_sensor_data_no_alert_for_type_without_target_conditions(app, client):
+    body = valid_reading()
+    sensor_id, _ = _active_sensor_in_area(app, body["hardware_id"])
+    body["values"] = [{"type": "battery", "value": 1.0}]
+
+    response = client.post("/api/v1/sensor_data", json=body)
+
+    assert response.status_code == 201
+
+    with app.app_context():
+        alert_count = get_collection("alerts").count_documents({"sensor_id": ObjectId(sensor_id)})
+
+    assert alert_count == 0
+
+
+def test_create_sensor_data_no_alert_for_pending_sensor(app, client):
+    body = valid_reading()
+    body["values"] = [{"type": "temperature", "value": 99.0}]
+
+    response = client.post("/api/v1/sensor_data", json=body)
+
+    assert response.status_code == 201
+
+    with app.app_context():
+        alert_count = get_collection("alerts").count_documents({})
+
+    assert alert_count == 0
+
+
+def test_create_sensor_data_no_alert_for_dangling_area_id(app, client):
+    body = valid_reading()
+    body["values"] = [{"type": "temperature", "value": 99.0}]
+
+    with app.app_context():
+        sensors.create({
+            "hardware_id": body["hardware_id"],
+            "status": "active",
+            "area_id": ObjectId(),
+            "zone_id": ObjectId(),
+        })
+
+    response = client.post("/api/v1/sensor_data", json=body)
+
+    assert response.status_code == 201
+
+    with app.app_context():
+        alert_count = get_collection("alerts").count_documents({})
+
+    assert alert_count == 0
