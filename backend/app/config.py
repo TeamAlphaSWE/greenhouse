@@ -13,3 +13,4 @@ class Config:
     MONGO_SERVER_SELECTION_TIMEOUT_MS = int(
         os.environ.get("MONGO_SERVER_SELECTION_TIMEOUT_MS", "5000")
     )
+    SECRET_KEY = os.environ.get("SECRET_KEY", "dev-secret-key-change-me")
