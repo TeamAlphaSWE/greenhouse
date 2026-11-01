@@ -1,151 +1,222 @@
-from pymongo import MongoClient
-from datetime import datetime
-
-connection_string=("mongodb+srv://rcoulson_db_user:7q6kDfRuldzW2COa@greenhouse-clouster.n6uuf84.mongodb.net/year2_greenhouse_db?retryWrites=true&w=majority&appName=greenhouse-clouster")
-client = MongoClient(
-    connection_string,
-    serverSelectionTimeoutMS=10000
-)
+from pymongo import MongoClient # to be able to connect to MongoDB and our database
+from datetime import datetime # used for timestamps and created/updated at times
+from bson import ObjectId # get data from database
+import os
+MONGO_URI = os.environ.get("MONGO_URI", "mongodb://localhost:27017")
+MONGO_DB_NAME = os.environ.get("MONGO_DB_NAME", "year2_greenhouse_db")
+client = MongoClient(MONGO_URI)
+db = client[MONGO_DB_NAME]
 
 
 try:
+    # Test the MongoDB connection
     client.admin.command("ping")
     print("MongoDB connection successful!")
 
-    db = client["year2_greenhouse_db"]
-
-    collections = db.list_collection_names()
-
-    print("Existing collections:")
-
-    for collection in collections:
-        print(collection)
-
-except Exception as e:
-    print("MongoDB connection failed:")
-    print(e)
-
-
-
-required_collections = [
-    "sensor_data",
-    "sensors",
-    "zones",
-    "users"
-]
-
-existing_collections = db.list_collection_names()
-
-for collection in required_collections:
-    if collection not in existing_collections:
-        db.create_collection(collection)
-        print(f"Created collection: {collection}")
-    else:
-        print(f"Collection already exists: {collection}")
-
-for collection in db.list_collection_names():
-    print(f"collection name: {collection}")
-    print(db[collection].find_one())
-
-
-zone = {
-    "name": "Zone Test",
-    "description": "test",
-    "status": "active",
-    "created_at": datetime.now(),
-    "updated_at": datetime.now(),
-    "areas": [
-       {
-            "name": "Area Test",
-            "status": "active",
-            "target_conditions": {
-                "temperature": {
-                    "min": 60,
-                    "max": 120
+    # Schema validator for sensors
+    SENSORS_VALIDATOR = {
+        "$jsonSchema": {
+            "bsonType": "object",
+            "required": [
+                "_id",
+                "hardware_id",
+                "status",
+                "created_at",
+                "updated_at"
+            ],
+            "properties": {
+                "hardware_id": {
+                    "bsonType": "string"
                 },
-                "humidity": {
-                    "min": 50,
-                    "max": 70
+                "status": {
+                    "enum": ["pending", "active"]
+                },
+                "zone_id": {
+                    "bsonType": "objectId"
+                },
+                "area_id": {
+                    "bsonType": "objectId"
+                },
+                "type": {
+                    "bsonType": "array",
+                    "items": {
+                        "bsonType": "string"
+                    }
                 }
             }
         }
-    ]
-}  
+    }
 
-
-existing_zone = db["zones"].find_one({"name": "Zone Test"})
-if existing_zone:
-    print("zone collection populated with test zone all ready")
-else:
-    result = db["zones"].insert_one(zone)
-    print(result.inserted_id)
-    print ("zone created")
-
-existing_zone = db["zones"].find_one({"name": "Zone Test"})
-zone_id=existing_zone["_id"]
-area_id=existing_zone["areas"][0]
-
-sensor = {
-    "name": "Sensor Test",
-    "brand": "Shelly",
-    "model": "H&T",
-    "zone_id": zone_id,
-    "area_id": area_id,
-    "hardware":"test",
-    "type": ["humidity", "temperature"],
-    "created_at": datetime.now(),
-    "updated_at": datetime.now()
-}
-
-existing_sensors = db["sensors"].find_one({"name": "Sensor Test"})
-if existing_sensors:
-    print("sensors collection populated with test sensor all ready")
-else:
-    result = db["sensors"].insert_one(sensor)
-    print(result.inserted_id)
-    print ("sensor created")
-
-sensor_id = existing_sensors["_id"]
-
-sensor_data = {
-    "timestamp": datetime.now(),
-    "sensor_id": sensor_id,
-    "values": [
-        {
-            "type": "temperature",
-            "value": 23.4
-        },
-        {
-            "type": "humidity",
-            "value": 50
-        },
-        {
-            "type": "battery",
-            "value": 82
+    # Schema validator for zones
+    ZONES_VALIDATOR = {
+        "$jsonSchema": {
+            "bsonType": "object",
+            "required": [
+                "name",
+                "description",
+                "status",
+                "created_at",
+                "updated_at",
+                "areas"
+            ],
+            "properties": {
+                "name": {
+                    "bsonType": "string"
+                },
+                "description": {
+                    "bsonType": "string"
+                },
+                "status": {
+                    "enum": ["active", "inactive"]
+                },
+                "created_at": {
+                    "bsonType": "date"
+                },
+                "updated_at": {
+                    "bsonType": "date"
+                },
+                "areas": {
+                    "bsonType": "array",
+                    "items": {
+                        "bsonType": "object",
+                        "required": [
+                            "name",
+                            "status",
+                            "target_conditions"
+                        ],
+                        "properties": {
+                            "name": {
+                                "bsonType": "string"
+                            },
+                            "status": {
+                                "enum": ["active", "inactive"]
+                            },
+                            "target_conditions": {
+                                "bsonType": "object"
+                            }
+                        }
+                    }
+                }
+            }
         }
-    ]
-}
+    }
 
-existing_data = db["sensor_data"].find_one({"sensor_id": sensor_id})
+    # Schema validator for sensor_data
+    SENSOR_DATA_VALIDATOR = {
+        "$jsonSchema": {
+            "bsonType": "object",
+            "required": [
+                "timestamp",
+                "sensor_id",
+                "values"
+            ],
+            "properties": {
+                "timestamp": {
+                    "bsonType": "date"
+                },
+                "sensor_id": {
+                    "bsonType": "objectId"
+                },
+                "values": {
+                    "bsonType": "array",
+                    "items": {
+                        "bsonType": "object",
+                        "required": [
+                            "type",
+                            "value"
+                        ],
+                        "properties": {
+                            "type": {
+                                "bsonType": "string"
+                            },
+                            "value": {
+                                "bsonType": [
+                                    "double",
+                                    "int",
+                                    "long",
+                                    "decimal"
+                                ]
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
 
-if existing_data:
-    print("Sensor data already exists")
-else:
-    result = db["sensor_data"].insert_one(sensor_data)
-    print("Sensor data created")
+    # Schema validator for users
+    USERS_VALIDATOR = {
+        "$jsonSchema": {
+            "bsonType": "object",
+            "required": [
+                "username",
+                "password_hash",
+                "admin",
+                "created_at",
+                "updated_at"
+            ],
+            "properties": {
+                "username": {
+                    "bsonType": "string"
+                },
+                "password_hash": {
+                    "bsonType": "string"
+                },
+                "admin": {
+                    "bsonType": "bool"
+                },
+                "created_at": {
+                    "bsonType": "date"
+                },
+                "updated_at": {
+                    "bsonType": "date"
+                }
+            }
+        }
+    }
 
-user = {
-    "username": "user Test",
-    "password_hash": "test",
-    "admin":True,
-    "created_at": datetime.now(),
-    "updated_at": datetime.now()
-}
+    # Store all collection names and their validators together.
+    COLLECTIONS = {
+        "sensors": SENSORS_VALIDATOR,
+        "zones": ZONES_VALIDATOR,
+        "sensor_data": SENSOR_DATA_VALIDATOR,
+        "users": USERS_VALIDATOR
+    }
 
-existing_user = db["users"].find_one({"username":"user Test"})
+    # Create collections with schema validation.
+    # Existing collections are skipped.
+    for name, validator in COLLECTIONS.items():
 
-if existing_user:
-    print("user already exists")
-else:
-    result = db["users"].insert_one(user)
-    print("user created")
+        if name in db.list_collection_names():
+            print(f"{name} already exists, skipping")
+            continue
+
+        db.create_collection(
+            name,
+            validator=validator
+        )
+
+        print(f"Created {name} with schema validation")
+
+    # Display the collections that currently exist.
+    print("\nExisting collections:")
+
+    for collection in db.list_collection_names():
+        print(collection)
+
+    # Display one existing document from each collection.
+    # This only reads data. It does NOT create test data.
+    print("\nChecking existing documents:")
+
+    for collection in COLLECTIONS:
+        print(f"\nCollection: {collection}")
+        print(db[collection].find_one())
+
+    print("\nDatabase initialization complete!")
+
+except Exception as e:
+    print("MongoDB connection or initialization failed:")
+    print(e)
+
+finally:
+    client.close()
