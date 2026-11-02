@@ -8,11 +8,10 @@ st.write("View temperature and humidity alerts for greenhouse zones.")
 st.divider()
 
 alerts = [
-    {"zone": "Zone 1", "type": "Temperature", "message": "Temperature is too high"},
+    {"zone": "Zone 1", "type": "Temperature", "message": "Temperature is too high", "value": 35, "threshold": 30},
     {"zone": "Zone 2", "type": "Humidity", "message": "Humidity is too low"},
-    {"zone": "Zone 4", "type": "Temperature", "message": "Temperature is too low"}
+    {"zone": "Zone 4", "type": "Temperature", "message": "Temperature is too low", "value": 17, "threshold": 20}
 ]
-
 
 
 st.subheader("Alert Summary")
@@ -50,3 +49,12 @@ for alert in alerts:
     with st.container(border=True):
         st.write("**" + alert["zone"] + " - " + alert["type"] + " Alert**")
         st.write(alert["message"])
+
+        if alert["type"] == "Temperature":
+            difference = abs(alert["value"] - alert["threshold"])
+
+            if alert["value"] > alert["threshold"]:
+                st.write(f"Temperature was {difference}°C above the limit")
+            else:
+                st.write(f"Temperature was {difference}°C below the limit")
+
