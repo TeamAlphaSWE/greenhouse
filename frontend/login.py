@@ -132,12 +132,12 @@ st.markdown(
         color: #d4f3a8;
     }}
 
-    .gold-line {{
-        width: 95px;
-        height: 4px;
-        background: #f0b728;
-        margin: 28px 0 0 6vw;
-    }}
+    # .gold-line {{
+    #     width: 95px;
+    #     height: 4px;
+    #     background: #f0b728;
+    #     margin: 28px 0 0 6vw;
+    # }}
 
     /* RIGHT SIDE */
 
