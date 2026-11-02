@@ -9,7 +9,7 @@ st.divider()
 
 alerts = [
     {"zone": "Zone 1", "type": "Temperature", "message": "Temperature is too high", "value": 35, "threshold": 30},
-    {"zone": "Zone 2", "type": "Humidity", "message": "Humidity is too low"},
+   {"zone": "Zone 2", "type": "Humidity", "message": "Humidity is too low", "value": 35, "threshold": 45},
     {"zone": "Zone 4", "type": "Temperature", "message": "Temperature is too low", "value": 17, "threshold": 20}
 ]
 
@@ -50,11 +50,15 @@ for alert in alerts:
         st.write("**" + alert["zone"] + " - " + alert["type"] + " Alert**")
         st.write(alert["message"])
 
-        if alert["type"] == "Temperature":
+        if alert["type"] == "Temperature" or alert["type"] == "Humidity":
             difference = abs(alert["value"] - alert["threshold"])
 
-            if alert["value"] > alert["threshold"]:
-                st.write(f"Temperature was {difference}°C above the limit")
+            if alert["type"] == "Temperature":
+                unit = "°C"
             else:
-                st.write(f"Temperature was {difference}°C below the limit")
+                unit = " percentage points"
 
+            if alert["value"] > alert["threshold"]:
+                st.write(f'{alert["type"]} was {difference}{unit} above the limit')
+            else:
+                st.write(f'{alert["type"]} was {difference}{unit} below the limit')
