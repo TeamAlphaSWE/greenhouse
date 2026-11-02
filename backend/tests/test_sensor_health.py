@@ -34,7 +34,7 @@ def test_sensor_health_empty(client):
 
     assert response.status_code == 200
     assert response.get_json() == {
-        "summary": {"total": 0, "reporting": 0, "stale": 0, "no_data": 0, "low_battery": 0},
+        "summary": {"total": 0, "reporting": 0, "no_data": 0, "low_battery": 0},
         "sensors": [],
         "total": 0,
     }
@@ -51,25 +51,26 @@ def test_sensor_health_states_and_summary(app, client):
     body = client.get("/api/v1/sensors/health").get_json()
     by_name = {s["name"]: s for s in body["sensors"]}
 
-    assert body["summary"] == {"total": 3, "reporting": 1, "stale": 1, "no_data": 1, "low_battery": 1}
+    assert body["summary"] == {"total": 3, "reporting": 2, "no_data": 1, "low_battery": 1}    
     assert by_name["A"]["state"] == "reporting"
     assert by_name["A"]["battery"] == 14
     assert by_name["A"]["low_battery"] is True
     assert by_name["A"]["minutes_since_last_seen"] == 5
-    assert by_name["B"]["state"] == "stale"
+    assert by_name["B"]["state"] == "reporting"
+    assert by_name["B"]["minutes_since_last_seen"] == 300    
     assert by_name["C"]["state"] == "no_data"
     assert by_name["C"]["last_seen"] is None
     assert by_name["C"]["battery"] is None
 
 
-def test_sensor_health_uses_per_sensor_interval(app, client):
-    usb = add_sensor(app, "USB", report_interval_minutes=5)
-    add_reading(app, usb, minutes_ago(47))
+def test_sensor_health_returns_zone_and_area(app, client):
+    zone_id, area_id = ObjectId(), ObjectId()
+    add_sensor(app, "A", zone_id=zone_id, area_id=area_id)
 
-    body = client.get("/api/v1/sensors/health").get_json()
+    sensor = client.get("/api/v1/sensors/health").get_json()["sensors"][0]
 
-    assert body["sensors"][0]["state"] == "stale"
-
+    assert sensor["zone_id"] == str(zone_id)
+    assert sensor["area_id"] == str(area_id)
 
 def test_sensor_health_filters_by_zone(app, client):
     zone_b = ObjectId()
