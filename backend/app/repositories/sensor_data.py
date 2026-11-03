@@ -1,7 +1,7 @@
+from __future__ import annotations
 from datetime import datetime, timezone
 from bson import ObjectId
 from app.repository import Repository
-from __future__ import annotations
 class SensorDataRepository(Repository):
     collection_name = "sensor_data"
 
