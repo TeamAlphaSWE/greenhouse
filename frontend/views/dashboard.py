@@ -4,7 +4,7 @@ import streamlit as st
 
 from sensor_api import get_sensor_data, get_sensors, get_zones, readings_to_frame
 
-st.title("Dashboard")
+st.title("Sensors")
 
 
 def show(value, unit):
