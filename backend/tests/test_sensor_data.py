@@ -5,6 +5,7 @@ import pytest
 from app.db import get_collection
 from app.repositories.sensor_data import sensor_data
 from app.repositories.sensors import sensors
+from app.repositories.zones import zones
 
 
 def test_list_sensor_data_empty(client):
@@ -269,6 +270,58 @@ def test_create_sensor_data_no_alert_for_pending_sensor(app, client):
         alert_count = get_collection("alerts").count_documents({})
 
     assert alert_count == 0
+
+
+def test_create_sensor_data_no_alert_for_incomplete_thresholds(app, client):
+    body = valid_reading()
+    area_id = ObjectId()
+
+    with app.app_context():
+        get_collection("zones").insert_one({
+            "name": "Zone 1",
+            "description": "Test zone",
+            "status": "active",
+            "areas": [{
+                "id": area_id,
+                "name": "Area 1",
+                "status": "active",
+                "target_conditions": {
+                    "temperature": {"min": 18},
+                },
+            }],
+        })
+        sensor_id = sensors.create({
+            "hardware_id": body["hardware_id"],
+            "status": "active",
+            "area_id": area_id,
+            "zone_id": ObjectId(),
+        })["id"]
+
+    body["values"] = [{"type": "temperature", "value": 99.0}]
+
+    response = client.post("/api/v1/sensor_data", json=body)
+
+    assert response.status_code == 201
+
+    with app.app_context():
+        alert_count = get_collection("alerts").count_documents({"sensor_id": ObjectId(sensor_id)})
+
+    assert alert_count == 0
+
+
+def test_create_sensor_data_saves_reading_when_alert_check_fails(app, client, monkeypatch):
+    def fail(*args, **kwargs):
+        raise RuntimeError("boom")
+
+    monkeypatch.setattr(zones, "find_by_area_id", fail)
+
+    body = valid_reading()
+    _active_sensor_in_area(app, body["hardware_id"])
+
+    response = client.post("/api/v1/sensor_data", json=body)
+
+    assert response.status_code == 201
+    assert "id" in response.get_json()["sensor_data"]
 
 
 def test_create_sensor_data_no_alert_for_dangling_area_id(app, client):

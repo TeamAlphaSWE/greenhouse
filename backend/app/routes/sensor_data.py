@@ -43,10 +43,14 @@ def create_sensor_data():
         if sensor is None:
             sensor = sensor_repository.create_pending(data["hardware_id"])
         reading = sensor_data_repository.create_reading(sensor["id"], values)
-        _check_alerts(sensor, values)
     except PyMongoError:
         current_app.logger.exception("Failed to save sensor data")
         return jsonify({"error": "Unexpected server error"}), 500
+
+    try:
+        _check_alerts(sensor, values)
+    except Exception:
+        current_app.logger.exception("Failed to check alerts")
 
     return jsonify({"sensor_data": {"id": reading["id"]}}), 201
 
@@ -71,7 +75,12 @@ def _check_alerts(sensor, values):
         if thresholds is None:
             continue
 
-        if value["value"] < thresholds["min"] or value["value"] > thresholds["max"]:
+        min_value = thresholds.get("min")
+        max_value = thresholds.get("max")
+        if min_value is None or max_value is None:
+            continue
+
+        if value["value"] < min_value or value["value"] > max_value:
             alert_repository.create({
                 "sensor_id": sensor_repository._to_object_id(sensor["id"]),
                 "zone_id": zone_repository._to_object_id(zone["id"]),
@@ -80,7 +89,7 @@ def _check_alerts(sensor, values):
                 "value": value["value"],
                 "message": (
                     f"{value['type']} out of range: {value['value']} "
-                    f"(expected {thresholds['min']}-{thresholds['max']})"
+                    f"(expected {min_value}-{max_value})"
                 ),
                 "created_at": datetime.now(timezone.utc),
             })
