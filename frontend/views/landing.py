@@ -89,5 +89,28 @@ def update_dashboard():
     st.subheader("Temperature & Humidity Over Time")
     st.line_chart(chart_data, x="Date", y=["Temperature", "Humidity"])
 
+#-------------- Line chart Displaying Historical Data for specific sensor -------------------
+
+    st.subheader("Historical Sensor Data")
+    oldest_date = chart_data["Date"].min().date() # min is the oldest date data was collected
+    recent_date = chart_data["Date"].max().date() # max is the most recent date data was collected
+    timerange_id = st.date_input(
+        "Enter time range to filter data",
+        value = (oldest_date, recent_date),
+        min_value = oldest_date,
+        max_value = recent_date
+        )
+
+    if len(timerange_id) == 2:
+        start_date, end_date = timerange_id
+        range_filter = chart_data[
+            (chart_data["Date"].dt.date >= start_date) &
+            (chart_data["Date"].dt.date <= end_date)
+        ]
+
+    if range_filter.empty:
+        st.write("No sensor data available for this range.")
+    else:
+        st.line_chart(range_filter, x="Date", y=["Temperature", "Humidity"]) # this can collect the week's data and graph it
 
 update_dashboard()
