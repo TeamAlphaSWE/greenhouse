@@ -1,7 +1,11 @@
+from datetime import datetime, timezone
+
 from flask import Blueprint, current_app, jsonify, request
 from pymongo.errors import PyMongoError
+from app.repositories.alerts import alerts as alert_repository
 from app.repositories.sensor_data import sensor_data as sensor_data_repository
 from app.repositories.sensors import sensors as sensor_repository
+from app.repositories.zones import zones as zone_repository
 
 sensor_data = Blueprint("sensor_data", __name__, url_prefix="/api/v1/sensor_data")
 
@@ -43,7 +47,52 @@ def create_sensor_data():
         current_app.logger.exception("Failed to save sensor data")
         return jsonify({"error": "Unexpected server error"}), 500
 
+    try:
+        _check_alerts(sensor, values)
+    except Exception:
+        current_app.logger.exception("Failed to check alerts")
+
     return jsonify({"sensor_data": {"id": reading["id"]}}), 201
+
+
+def _check_alerts(sensor, values):
+    area_id = sensor.get("area_id")
+    if not area_id:
+        return
+
+    zone = zone_repository.find_by_area_id(area_id)
+    if zone is None:
+        return
+
+    area = next((a for a in zone["areas"] if a.get("id") == area_id), None)
+    if area is None:
+        return
+
+    target_conditions = area.get("target_conditions", {})
+
+    for value in values:
+        thresholds = target_conditions.get(value["type"])
+        if thresholds is None:
+            continue
+
+        min_value = thresholds.get("min")
+        max_value = thresholds.get("max")
+        if min_value is None or max_value is None:
+            continue
+
+        if value["value"] < min_value or value["value"] > max_value:
+            alert_repository.create({
+                "sensor_id": sensor_repository._to_object_id(sensor["id"]),
+                "zone_id": zone_repository._to_object_id(zone["id"]),
+                "area_id": area_id,
+                "type": value["type"],
+                "value": value["value"],
+                "message": (
+                    f"{value['type']} out of range: {value['value']} "
+                    f"(expected {min_value}-{max_value})"
+                ),
+                "created_at": datetime.now(timezone.utc),
+            })
 
 
 def _validate_reading(data):
