@@ -36,6 +36,11 @@ def update_dashboard():
         st.write("No sensors available.")
         return
 
+    pending_count = sum(1 for s in sensors if s.get("status") == "pending")
+    if pending_count:
+        noun = "sensor is" if pending_count == 1 else "sensors are"
+        st.warning(f"{pending_count} {noun} pending activation.")
+
     sensor_options = {s["id"]: s.get("name") or s["hardware_id"] for s in sensors}
 
     selected_id = st.segmented_control(
