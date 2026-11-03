@@ -26,6 +26,22 @@ def list_sensor_data(sensor_id):
         "total": len(readings),
     })
     
+@sensor_data.get("/<sensor_id>/latest")
+def latest_sensor_data(sensor_id):
+    if sensor_data_repository._to_object_id(sensor_id) is None:
+        return jsonify({"error": "Invalid sensor_id"}), 400
+
+    try:
+        reading = sensor_data_repository.find_latest_by_sensor_id(sensor_id)
+    except PyMongoError:
+        current_app.logger.exception("Failed to load latest sensor data")
+        return jsonify({"error": "Unexpected server error"}), 500
+
+    if reading is None:
+        return jsonify({"error": "No readings for this sensor"}), 404
+
+    return jsonify({"sensor_data": reading})
+    
 @sensor_data.post("")
 def create_sensor_data():
     data = request.get_json(silent=True)

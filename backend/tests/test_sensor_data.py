@@ -178,6 +178,66 @@ def test_create_sensor_data_database_error_returns_500(client, monkeypatch):
     assert response.status_code == 500
     assert response.get_json() == {"error": "Unexpected server error"}
 
+def test_latest_sensor_data_returns_newest_reading(app, client):
+    sensor_id = ObjectId()
+
+    with app.app_context():
+        get_collection("sensor_data").insert_many([
+            {
+                "sensor_id": sensor_id,
+                "timestamp": "2026-10-09T12:05:00Z",
+                "values": [
+                    {"type": "temperature", "value": 23.6},
+                    {"type": "humidity", "value": 51},
+                    {"type": "battery", "value": 87},
+                ],
+            },
+            {
+                "sensor_id": sensor_id,
+                "timestamp": "2026-10-09T12:00:00Z",
+                "values": [{"type": "temperature", "value": 23.4}],
+            },
+            {
+                "sensor_id": ObjectId(),
+                "timestamp": "2026-10-09T13:00:00Z",
+                "values": [{"type": "temperature", "value": 19.0}],
+            },
+        ])
+
+    response = client.get(f"/api/v1/sensor_data/{sensor_id}/latest")
+    reading = response.get_json()["sensor_data"]
+
+    assert response.status_code == 200
+    assert reading["sensor_id"] == str(sensor_id)
+    assert reading["timestamp"] == "2026-10-09T12:05:00Z"
+    assert [v["type"] for v in reading["values"]] == ["temperature", "humidity", "battery"]
+    assert isinstance(reading["id"], str)
+
+
+def test_latest_sensor_data_no_readings_returns_404(client):
+    response = client.get(f"/api/v1/sensor_data/{ObjectId()}/latest")
+
+    assert response.status_code == 404
+    assert response.get_json() == {"error": "No readings for this sensor"}
+
+
+def test_latest_sensor_data_invalid_sensor_id_returns_400(client):
+    response = client.get("/api/v1/sensor_data/not-an-id/latest")
+
+    assert response.status_code == 400
+    assert response.get_json() == {"error": "Invalid sensor_id"}
+
+
+def test_latest_sensor_data_database_error_returns_500(client, monkeypatch):
+    def fail(*args, **kwargs):
+        raise PyMongoError("database unavailable")
+
+    monkeypatch.setattr(sensor_data, "find_latest_by_sensor_id", fail)
+
+    response = client.get(f"/api/v1/sensor_data/{ObjectId()}/latest")
+
+    assert response.status_code == 500
+    assert response.get_json() == {"error": "Unexpected server error"}
 
 def _active_sensor_in_area(app, hardware_id):
     area_id = ObjectId()
