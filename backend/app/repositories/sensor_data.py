@@ -18,6 +18,18 @@ class SensorDataRepository(Repository):
         doc = self.collection.find_one({"sensor_id": oid}, sort=[("timestamp", -1)])
         return self._to_entity(doc)
 
+    def latest_by_sensor(self, sensor_ids: list) -> dict:
+        """Return {sensor_id (str): latest reading} for the given sensor ObjectIds."""
+        pipeline = [
+            {"$match": {"sensor_id": {"$in": sensor_ids}}},
+            {"$sort": {"timestamp": -1}},
+            {"$group": {"_id": "$sensor_id", "doc": {"$first": "$$ROOT"}}},
+        ]
+        return {
+            str(row["_id"]): self._to_entity(row["doc"])
+            for row in self.collection.aggregate(pipeline)
+        }
+    
     def create_reading(self, sensor_id: str, values: list[dict]) -> dict:
         return self.create({
             "sensor_id": ObjectId(sensor_id),
