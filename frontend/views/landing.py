@@ -15,9 +15,6 @@ import requests        # for making HTTP requests to the Flask local server
 # This is a home page.Will have one line graph with temp and humidity in the middle 
 # Buttons that will change the graph based on what zone the user wants to see.
 
-st.page_link("views/dashboard.py", label="Go to Dashboard")
-st.page_link("views/alert.py", label="Go to Alerts")
-st.page_link("views/settings.py", label="Go to Settings")
 
 
 st.title("Greenhouse Dashboard")
@@ -38,6 +35,35 @@ def update_dashboard():
     if not sensors:
         st.write("No sensors available.")
         return
+
+    pending_count = sum(1 for s in sensors if s.get("status") == "pending")
+    if pending_count:
+        noun = "sensor is" if pending_count == 1 else "sensors are"
+        st.markdown("""
+        <style>
+        .st-key-activation_banner {
+            background-color: #fff3cd;
+            border: 1px solid #ffe69c;
+            border-radius: 8px;
+            padding: 12px 16px;
+        }
+        .st-key-activation_banner p {
+            color: #664d03;
+        }
+        </style>
+        """, unsafe_allow_html=True)
+
+        with st.container(key="activation_banner"):
+            message_col, action_col = st.columns(
+                [4, 1], vertical_alignment="center"
+            )
+
+            with message_col:
+                st.write(f"⚠️ {pending_count} {noun} pending activation.")
+
+            with action_col:
+                with st.container(horizontal=True, horizontal_alignment="right"):
+                    st.page_link("views/sensors.py", label="Review")
 
     sensor_options = {s["id"]: s.get("name") or s["hardware_id"] for s in sensors}
 
@@ -92,5 +118,28 @@ def update_dashboard():
     st.subheader("Temperature & Humidity Over Time")
     st.line_chart(chart_data, x="Date", y=["Temperature", "Humidity"])
 
+#-------------- Line chart Displaying Historical Data for specific sensor -------------------
+
+    st.subheader("Historical Sensor Data")
+    oldest_date = chart_data["Date"].min().date() # min is the oldest date data was collected
+    recent_date = chart_data["Date"].max().date() # max is the most recent date data was collected
+    timerange_id = st.date_input(
+        "Enter time range to filter data",
+        value = (oldest_date, recent_date),
+        min_value = oldest_date,
+        max_value = recent_date
+        )
+
+    if len(timerange_id) == 2:
+        start_date, end_date = timerange_id
+        range_filter = chart_data[
+            (chart_data["Date"].dt.date >= start_date) &
+            (chart_data["Date"].dt.date <= end_date)
+        ]
+
+        if range_filter.empty:
+            st.write("No sensor data available for this range.")
+        else:
+            st.line_chart(range_filter, x="Date", y=["Temperature", "Humidity"]) # this can collect the week's data and graph it
 
 update_dashboard()

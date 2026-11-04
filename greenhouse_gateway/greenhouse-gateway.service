@@ -1,0 +1,21 @@
+# install on the greenhouse gateway computer 
+# see greenhouse_gateway/README.md for installation steps
+
+[Unit]
+Description=Greenhouse gateway (Shelly MQTT -> ingest API)
+After=network-online.target mosquitto.service
+Wants=network-online.target
+Requires=mosquitto.service
+
+[Service]
+Type=simple
+User=greenhouse
+WorkingDirectory=/home/greenhouse/greenhouse/greenhouse_gateway
+EnvironmentFile=-/home/greenhouse/greenhouse/greenhouse_gateway/.env
+Environment=PYTHONUNBUFFERED=1
+ExecStart=/home/greenhouse/greenhouse/.venv/bin/python subscriber.py
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
