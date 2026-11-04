@@ -39,7 +39,31 @@ def update_dashboard():
     pending_count = sum(1 for s in sensors if s.get("status") == "pending")
     if pending_count:
         noun = "sensor is" if pending_count == 1 else "sensors are"
-        st.warning(f"{pending_count} {noun} pending activation.")
+        st.markdown("""
+        <style>
+        .st-key-activation_banner {
+            background-color: #fff3cd;
+            border: 1px solid #ffe69c;
+            border-radius: 8px;
+            padding: 12px 16px;
+        }
+        .st-key-activation_banner p {
+            color: #664d03;
+        }
+        </style>
+        """, unsafe_allow_html=True)
+
+        with st.container(key="activation_banner"):
+            message_col, action_col = st.columns(
+                [4, 1], vertical_alignment="center"
+            )
+
+            with message_col:
+                st.write(f"⚠️ {pending_count} {noun} pending activation.")
+
+            with action_col:
+                with st.container(horizontal=True, horizontal_alignment="right"):
+                    st.page_link("views/sensors.py", label="Review")
 
     sensor_options = {s["id"]: s.get("name") or s["hardware_id"] for s in sensors}
 
@@ -113,9 +137,9 @@ def update_dashboard():
             (chart_data["Date"].dt.date <= end_date)
         ]
 
-    if range_filter.empty:
-        st.write("No sensor data available for this range.")
-    else:
-        st.line_chart(range_filter, x="Date", y=["Temperature", "Humidity"]) # this can collect the week's data and graph it
+        if range_filter.empty:
+            st.write("No sensor data available for this range.")
+        else:
+            st.line_chart(range_filter, x="Date", y=["Temperature", "Humidity"]) # this can collect the week's data and graph it
 
 update_dashboard()

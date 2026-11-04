@@ -22,6 +22,20 @@ if not sensors:
     st.info("No sensors available yet.")
     st.stop()
 
+# -------------------- Sensors list --------------------
+
+st.subheader("All sensors")
+for s in sensors:
+    row = st.columns([3, 2, 2])
+    row[0].write(s.get("name") or s["hardware_id"])
+    if s.get("status") == "pending":
+        row[1].badge("Pending", color="orange")
+        row[2].button("Activate", key=f"activate-{s['id']}")
+    else:
+        row[1].badge("Active", color="green")
+
+st.divider()
+
 sensor_names = {s["id"]: s.get("name") or s["hardware_id"] for s in sensors}
 sensor_id = st.selectbox(
     "Sensor",
