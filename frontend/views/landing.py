@@ -1,41 +1,79 @@
+"""One sensor-history chart with shared temperature/humidity axis (issue #162)."""
+from datetime import datetime, time, timedelta, timezone
+import os
+
+import pandas as pd
+import requests
 import streamlit as st
-import pandas as pd    # for data manipulation and analysis
-import numpy as np     # for numerical operations
-import requests        # for making HTTP requests to the Flask local server
+
+BACKEND_URL = os.environ.get("BACKEND_URL", "https://greenhouse.kentcs.org").rstrip("/")
+RANGES = {"24 hours": 1, "7 days": 7, "30 days": 30}
 
 
-
-# Pandas and Numpy are a packaged deal since Pandas relies on Numpy for numerical operations!!
-# let work on a dashboard!
-
-# -------------------- Multi Selection for Different Zones -------------------
-
-
-
-# This is a home page.Will have one line graph with temp and humidity in the middle 
-# Buttons that will change the graph based on what zone the user wants to see.
-
-
-
-st.title("Greenhouse Dashboard")
-st.write("-----------------------------------------------")
-
-#-------------------- Handling Real-Time Update Functionality --------------------
-
-BACKEND_URL = "https://greenhouse.kentcs.org"
+def history_frame(readings, sensor_id):
+    """Normalize dates to UTC and reject any explicitly mismatched sensor IDs."""
+    rows = []
+    for reading in readings:
+        if str(reading.get("sensor_id", sensor_id)) != str(sensor_id):
+            continue
+        values = {v.get("type"): v.get("value") for v in reading.get("values", [])}
+        rows.append({"Date": reading.get("timestamp"),
+                     "Temperature": values.get("temperature"),
+                     "Humidity": values.get("humidity")})
+    frame = pd.DataFrame(rows, columns=["Date", "Temperature", "Humidity"])
+    frame["Date"] = pd.to_datetime(frame["Date"], utc=True, errors="coerce")
+    for column in ["Temperature", "Humidity"]:
+        frame[column] = pd.to_numeric(frame[column], errors="coerce")
+    return (frame.dropna(subset=["Date"])
+            .dropna(subset=["Temperature", "Humidity"], how="all")
+            .sort_values("Date").reset_index(drop=True))
 
 
-@st.fragment(run_every = "10s")     #refresh the dashboard every 10 seconds
+def filter_history(frame, start=None, end=None):
+    """Use [start, end) so a custom end date includes its entire UTC day."""
+    mask = pd.Series(True, index=frame.index)
+    if start is not None:
+        mask &= frame["Date"] >= start
+    if end is not None:
+        mask &= frame["Date"] < end
+    return frame.loc[mask].copy()
+
+
+st.markdown("""
+<style>
+.gh-dashboard-hero { background:#123d2d; color:#fffdf4; padding:28px 30px;
+ border-radius:20px; margin-bottom:24px; }
+.gh-dashboard-hero p { color:#c7e5aa; font-size:12px; letter-spacing:2px;
+ text-transform:uppercase; margin:0 0 10px; }
+.gh-dashboard-hero h1 { color:#fffdf4; font-size:clamp(28px,5vw,42px);
+ margin:0; padding:0; line-height:1.2; }
+.st-key-sensor_trends { border:1px solid #dce4d6; border-radius:18px; padding:20px; }
+@media(max-width:540px) {
+ .gh-dashboard-hero { padding:22px 18px; }
+ .st-key-sensor_trends { padding:12px; }
+}
+</style>
+<header class="gh-dashboard-hero"><p>Greenhouse Project / Dashboard</p>
+<h1>A clearer view of your greenhouse.</h1></header>
+""", unsafe_allow_html=True)
+
+
+def api_get(path):
+    response = requests.get(f"{BACKEND_URL}{path}", timeout=10)
+    response.raise_for_status()
+    return response.json()
+
+
+@st.fragment(run_every="10s")
 def update_dashboard():
-
-    sensors_response = requests.get(f"{BACKEND_URL}/api/v1/sensors")
-    sensors_response.raise_for_status()
-    sensors = sensors_response.json().get("sensors", [])
-
-    if not sensors:
-        st.write("No sensors available.")
+    try:
+        sensors = api_get("/api/v1/sensors").get("sensors", [])
+    except (requests.RequestException, ValueError):
+        st.error("Unable to load sensors. Check the backend connection and try again.")
         return
-
+    if not sensors:
+        st.info("No sensors available.")
+        return
     pending_count = sum(1 for s in sensors if s.get("status") == "pending")
     if pending_count:
         noun = "sensor is" if pending_count == 1 else "sensors are"
@@ -65,81 +103,57 @@ def update_dashboard():
                 with st.container(horizontal=True, horizontal_alignment="right"):
                     st.page_link("views/sensors.py", label="Review")
 
-    sensor_options = {s["id"]: s.get("name") or s["hardware_id"] for s in sensors}
+    sensor_options = {s["id"]: s.get("name") or s.get("hardware_id") or s["id"]
+                      for s in sensors}
+    # Clear a removed sensor selection before creating its widget.
+    if st.session_state.get("trend_sensor") not in sensor_options:
+        st.session_state.pop("trend_sensor", None)
+    selected_id = st.selectbox("Select a sensor", list(sensor_options),
+                               format_func=sensor_options.get, key="trend_sensor")
 
-    selected_id = st.segmented_control(
-        "Select a sensor",
-        options = list(sensor_options.keys()),
-        format_func = lambda sensor_id: sensor_options[sensor_id],
-        selection_mode = "single",
-        default = next(iter(sensor_options)),
-    )
+    with st.container(key="sensor_trends"):
+        st.subheader("Temperature & Humidity Over Time")
+        period = st.selectbox("Time range", [*RANGES, "All history", "Custom"],
+                              index=1, key="trend_range")
+        now = datetime.now(timezone.utc)
+        start = end = None
+        if period in RANGES:
+            start, end = now - timedelta(days=RANGES[period]), now
+        elif period == "Custom":
+            selected_dates = st.date_input(
+                "Start and end dates (UTC)",
+                value=(now.date() - timedelta(days=7), now.date()),
+                key="trend_dates", format="YYYY-MM-DD")
+            if not isinstance(selected_dates, (tuple, list)) or len(selected_dates) != 2:
+                st.info("Select both a start date and an end date.")
+                return
+            first, last = selected_dates
+            if first > last:
+                st.error("The end date must be on or after the start date.")
+                return
+            start = datetime.combine(first, time.min, tzinfo=timezone.utc)
+            end = datetime.combine(last + timedelta(days=1), time.min, tzinfo=timezone.utc)
 
-    if selected_id is None:
-        st.write("Select a sensor to view its data.")
-        return
+        try:
+            readings = api_get(f"/api/v1/sensor_data/{selected_id}").get("sensor_data", [])
+        except (requests.RequestException, ValueError):
+            st.error("Unable to load this sensor's readings. Please try again.")
+            return
+        frame = history_frame(readings, selected_id)
+        filtered = filter_history(frame, start, end)
+        st.caption(f"Sensor: {sensor_options[selected_id]} · All times UTC · "
+                   "Temperature and humidity share one Y-axis. Values use stored sensor units.")
+        if start is not None:
+            label_end = end - timedelta(microseconds=1) if period == "Custom" else end
+            st.caption(f"Selected window: {start:%Y-%m-%d %H:%M} — {label_end:%Y-%m-%d %H:%M} UTC")
+        if filtered.empty:
+            st.info("No sensor data available for this range. Try All history or different dates.")
+            return
+        st.line_chart(filtered, x="Date", y=["Temperature", "Humidity"],
+                      color=["#28734f", "#91b44c"], width="stretch", height=360)
+        st.caption(f"{len(filtered):,} readings · "
+                   f"{filtered['Date'].min():%Y-%m-%d %H:%M} — "
+                   f"{filtered['Date'].max():%Y-%m-%d %H:%M} UTC")
 
-    response_sensor_data = requests.get(f"{BACKEND_URL}/api/v1/sensor_data/{selected_id}")
-    response_sensor_data.raise_for_status()
-    sensor_data = response_sensor_data.json()
-    record = sensor_data.get("sensor_data", [])      # Getting the all the records of sensor data from the response
-    chart_rows = []                                  # To store the previous data points for the chart
-
-    # Storing the data into a dict for easier access and manipulation
-    for records in record:
-        dictionary = {}
-        timestamp = records.get("timestamp")  # getting the timestamp inside the for loop
-
-        for id in records.get("values", []):
-            dictionary[id["type"]] = id["value"] # for the id var in dictionary, store the value based on the word type defined in the sensor_data response
-
-        temperature_data = dictionary.get("temperature")  # Getting the values of the response for temperature
-        humidity_data = dictionary.get("humidity")        # Gettting the value for the response for humidity
-
-        # Making a row for the chart data to visualize and connect points after updating
-
-        chart_rows.append({
-            "Temperature": temperature_data,
-            "Humidity": humidity_data,
-            "Date": timestamp
-        })
-
-    chart_data = pd.DataFrame(chart_rows) #converting rows in Dataframe to manipulate
-
-    if chart_data.empty:
-        st.write("No sensor data available.")
-        return
-
-    chart_data["Date"] = pd.to_datetime(chart_data["Date"])# turning the JSON timestamp into a datetime object
-    chart_data = chart_data.sort_values(by="Date")         # Sorting the chart data by Time for proper visualization
-
-#-------------- Line chart Displaying Temperature & Humidity for the selected sensor -------------------
-
-    st.subheader("Temperature & Humidity Over Time")
-    st.line_chart(chart_data, x="Date", y=["Temperature", "Humidity"])
-
-#-------------- Line chart Displaying Historical Data for specific sensor -------------------
-
-    st.subheader("Historical Sensor Data")
-    oldest_date = chart_data["Date"].min().date() # min is the oldest date data was collected
-    recent_date = chart_data["Date"].max().date() # max is the most recent date data was collected
-    timerange_id = st.date_input(
-        "Enter time range to filter data",
-        value = (oldest_date, recent_date),
-        min_value = oldest_date,
-        max_value = recent_date
-        )
-
-    if len(timerange_id) == 2:
-        start_date, end_date = timerange_id
-        range_filter = chart_data[
-            (chart_data["Date"].dt.date >= start_date) &
-            (chart_data["Date"].dt.date <= end_date)
-        ]
-
-        if range_filter.empty:
-            st.write("No sensor data available for this range.")
-        else:
-            st.line_chart(range_filter, x="Date", y=["Temperature", "Humidity"]) # this can collect the week's data and graph it
 
 update_dashboard()
