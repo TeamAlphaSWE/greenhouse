@@ -7,6 +7,7 @@ login = st.Page("login.py", title="Login")
 
 landing=st.Page("views/landing.py", title="Home", default=True)
 sensors_page=st.Page("views/sensors.py", title="Sensors")
+activate_page=st.Page("views/activate_sensor.py", title="Activate Sensor")
 alert=st.Page("views/alert.py", title="Alert")
 settings=st.Page("views/settings.py", title="Settings")
 credits=st.Page("views/credits.py", title="Credits")
@@ -18,7 +19,7 @@ if not st.session_state.get("logged_in", False):
     )
 else:
     nav = st.navigation(
-        [landing, sensors_page, alert, settings, credits]
+        [landing, sensors_page, activate_page, alert, settings, credits]
     )
 
 nav.run()

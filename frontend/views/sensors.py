@@ -30,7 +30,9 @@ for s in sensors:
     row[0].write(s.get("name") or s["hardware_id"])
     if s.get("status") == "pending":
         row[1].badge("Pending", color="orange")
-        row[2].button("Activate", key=f"activate-{s['id']}")
+        if row[2].button("Activate", key=f"activate-{s['id']}"):
+            st.session_state["activating_sensor_id"] = s["id"]
+            st.switch_page("views/activate_sensor.py")
     else:
         row[1].badge("Active", color="green")
 
