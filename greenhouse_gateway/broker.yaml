@@ -1,0 +1,9 @@
+listeners:
+  default:
+    type: tcp                
+    bind: 127.0.0.1:1883      # gateway subscriber
+  sensors:                   
+    bind: 0.0.0.0:8883        # Shellys (1883 is blocked from Multimedia Devices)
+plugins:                      
+  - amqtt.plugins.authentication.AnonymousAuthPlugin:
+      allow_anonymous: true
