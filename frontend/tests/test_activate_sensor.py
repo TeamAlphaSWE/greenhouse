@@ -5,7 +5,7 @@ from unittest.mock import patch
 
 from streamlit.testing.v1 import AppTest
 
-PAGE = Path(__file__).resolve().parents[1] / "views" / "activate_sensor.py"
+PAGE = Path(__file__).resolve().parents[1] / "views" / "sensors.py"
 
 SENSOR = {
     "id": "s1", "hardware_id": "shellyhtg3-e4b3233085e8",
@@ -45,6 +45,8 @@ def get(url, **kwargs):
         return Response(payload={"zones": ZONES})
     if url.endswith("/latest"):
         return Response(status_code=404)
+    if "/sensor_data/" in url:
+        return Response(payload={"sensor_data": []})
     raise AssertionError(f"unexpected GET {url}")
 
 
@@ -54,17 +56,37 @@ class ActivateSensorTests(unittest.TestCase):
         app.session_state["activating_sensor_id"] = SENSOR["id"]
         return app.run()
 
-    def test_no_sensor_selected_prompts_to_pick_one(self):
-        with patch("requests.get", side_effect=get), patch("streamlit.page_link"):
+    def test_no_sensor_activating_shows_list(self):
+        with patch("requests.get", side_effect=get):
             app = AppTest.from_file(str(PAGE)).run()
         self.assertFalse(app.exception)
-        self.assertIn("Select a sensor", app.info[0].value)
+        self.assertIn("All sensors", app.subheader[0].value)
+
+    def test_zone_and_area_start_unselected(self):
+        with patch("requests.get", side_effect=get):
+            app = self.run_app()
+        zone_select = [s for s in app.selectbox if s.label == "Zone"][0]
+        self.assertIsNone(zone_select.value)
+        self.assertEqual([s for s in app.selectbox if s.label == "Area"], [])
+        self.assertEqual([b for b in app.button if b.label == "Activate sensor"], [])
+
+    def test_back_button_returns_to_list(self):
+        with patch("requests.get", side_effect=get):
+            app = self.run_app()
+            back = [b for b in app.button if b.label == "← Back to sensors"][0]
+            back.click().run()
+        self.assertFalse(app.exception)
+        self.assertNotIn("activating_sensor_id", app.session_state)
+        self.assertIn("All sensors", app.subheader[0].value)
 
     def test_zone_selection_narrows_area_options(self):
         with patch("requests.get", side_effect=get):
             app = self.run_app()
+            zone_select = [s for s in app.selectbox if s.label == "Zone"][0]
+            zone_select.set_value("z1").run()
             self.assertFalse(app.exception)
             areas = [s for s in app.selectbox if s.label == "Area"][0]
+            self.assertIsNone(areas.value)
             self.assertEqual(list(areas.options), ["Area A1", "Area A2"])
 
             zone_select = [s for s in app.selectbox if s.label == "Zone"][0]
@@ -73,13 +95,36 @@ class ActivateSensorTests(unittest.TestCase):
             areas = [s for s in app.selectbox if s.label == "Area"][0]
             self.assertEqual(list(areas.options), ["Area B1"])
 
+    def test_activate_button_requires_name_zone_and_area(self):
+        with patch("requests.get", side_effect=get):
+            app = self.run_app()
+
+            zone_select = [s for s in app.selectbox if s.label == "Zone"][0]
+            zone_select.set_value("z1").run()
+            self.assertEqual([b for b in app.button if b.label == "Activate sensor"], [])  # no area yet
+
+            area_select = [s for s in app.selectbox if s.label == "Area"][0]
+            area_select.set_value("a1").run()
+            button = [b for b in app.button if b.label == "Activate sensor"][0]
+            self.assertTrue(button.disabled)  # no name yet
+
+            name_input = [t for t in app.text_input if t.label == "Sensor name"][0]
+            name_input.set_value("Greenhouse East").run()
+            button = [b for b in app.button if b.label == "Activate sensor"][0]
+            self.assertFalse(button.disabled)
+
     def test_submit_patches_name_and_area_id_only(self):
         with patch("requests.get", side_effect=get), \
-             patch("requests.patch", return_value=Response(payload={"sensor": {"id": "s1"}})) as mock_patch, \
-             patch("streamlit.switch_page") as mock_switch:
+             patch("requests.patch", return_value=Response(payload={"sensor": {"id": "s1"}})) as mock_patch:
             app = self.run_app()
             name_input = [t for t in app.text_input if t.label == "Sensor name"][0]
             name_input.set_value("Greenhouse East").run()
+
+            zone_select = [s for s in app.selectbox if s.label == "Zone"][0]
+            zone_select.set_value("z1").run()
+
+            area_select = [s for s in app.selectbox if s.label == "Area"][0]
+            area_select.set_value("a1").run()
             self.assertFalse(app.exception)
 
             button = [b for b in app.button if b.label == "Activate sensor"][0]
@@ -90,7 +135,9 @@ class ActivateSensorTests(unittest.TestCase):
         _, kwargs = mock_patch.call_args
         self.assertEqual(kwargs["json"], {"name": "Greenhouse East", "area_id": "a1"})
         self.assertNotIn("zone_id", kwargs["json"])
-        mock_switch.assert_called_once_with("views/sensors.py")
+        # a successful activation clears the flag and drops back to the list
+        self.assertNotIn("activating_sensor_id", app.session_state)
+        self.assertIn("All sensors", app.subheader[0].value)
 
 
 if __name__ == "__main__":
