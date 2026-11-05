@@ -1,7 +1,13 @@
 import streamlit as st
 import pandas as pd    # for data manipulation and analysis
 import numpy as np     # for numerical operations
-import requests        # for making HTTP requests to the Flask local server
+import requests
+
+
+
+
+
+   
 
 
 
@@ -30,7 +36,7 @@ def update_dashboard():
 
     sensors_response = requests.get(f"{BACKEND_URL}/api/v1/sensors")
     sensors_response.raise_for_status()
-    sensors = sensors_response.json().get("sensors", [])
+    sensors = sensors_response.json().get("sensors", []) #Grabbing sensors names
 
     if not sensors:
         st.write("No sensors available.")
@@ -77,7 +83,7 @@ def update_dashboard():
 
     if selected_id is None:
         st.write("Select a sensor to view its data.")
-        return
+        
 
     response_sensor_data = requests.get(f"{BACKEND_URL}/api/v1/sensor_data/{selected_id}")
     response_sensor_data.raise_for_status()
@@ -85,7 +91,8 @@ def update_dashboard():
     record = sensor_data.get("sensor_data", [])      # Getting the all the records of sensor data from the response
     chart_rows = []                                  # To store the previous data points for the chart
 
-    # Storing the data into a dict for easier access and manipulation
+    
+# Storing the data into a dict for easier access and manipulation
     for records in record:
         dictionary = {}
         timestamp = records.get("timestamp")  # getting the timestamp inside the for loop
@@ -117,6 +124,86 @@ def update_dashboard():
 
     st.subheader("Temperature & Humidity Over Time")
     st.line_chart(chart_data, x="Date", y=["Temperature", "Humidity"])
+
+
+ # Customization for sensor display cards and expandable sections
+    st.subheader("Sensor Display")
+
+ #Getting hardware ids / sensor identifiers from the backend
+    response = requests.get(f"{BACKEND_URL}/api/v1/sensors")
+    response.raise_for_status()
+    sensors = response.json().get("sensors", [])
+    sensor_id = [sensor["id"] for sensor in sensors]
+
+    
+# Overwriting the sensor IDs with custom names for display purposes!!!
+    
+
+#Getting the list of assigned zones...
+    response = requests.get(f"{BACKEND_URL}/api/v1/zones")
+    response.raise_for_status()
+    zones = response.json().get("zones", [])
+
+    area_names = [
+        area.get("name")
+        for zone in zones
+        for area in zone.get("areas", [])
+    ]
+
+#Getting the latest temperature, humidity, and battery data for each sensor
+
+# Creating four empty dictionaries  using the sensor ID as a key
+    temp_id = {}
+    humidity_id = {}
+    battery_id = {}
+    timestamp = {}
+    
+
+    # Loops through every sensor ID
+    for sensor_name in sensor_id:
+        sensor_response = requests.get(f"{BACKEND_URL}/api/v1/sensor_data/{sensor_name}")
+        sensor_response.raise_for_status()
+        sensor_data = sensor_response.json().get("sensor_data", [])
+        latest = sensor_data[-1] if sensor_data else {}
+        values = latest.get("values", [])
+
+        latest_timestamp = latest.get("timestamp")
+        #Converting timestamp into something more readable
+        timestamp[sensor_name] = (
+            pd.to_datetime(latest_timestamp).strftime("%Y-%m-%d %I:%M %p")
+            if latest_timestamp
+            else "N/A"
+        )
+
+        for value in values:
+            value_type = value.get("type")
+            value_data = value.get("value")
+
+            if value_type == "temperature":
+                temp_id[sensor_name] = value_data
+            elif value_type == "humidity":
+                humidity_id[sensor_name] = value_data
+            elif value_type == "battery":
+                battery_id[sensor_name] = value_data
+
+        
+# Dynmaically adding expanders for each sensors added!
+# Displaying zone details for the first three sensors
+    for index, sensor_name in enumerate(sensor_id): # This class functions like an iterator...starting num is 0 and increases index!
+        area_name = (
+            area_names[index]
+            if index < len(area_names)
+            else "Unassigned"
+        )
+        with st.expander(f"Sensor {index + 1}"): # makes new expanders!
+            st.write(f"Sensor Name: {sensor_name} ")
+            st.write(f"Assigned Area: {area_name}")
+            st.write(f"Latest Temperature: {temp_id.get(sensor_name, 'N/A')}")
+            st.write(f"Latest Humidity: {humidity_id.get(sensor_name, 'N/A')}")
+            st.write(f"Battery Percentage: {battery_id.get(sensor_name, 'N/A')}")
+            st.write(f"Last Reported Timestamp: {timestamp.get(sensor_name, 'N/A')}")
+
+    
 
 #-------------- Line chart Displaying Historical Data for specific sensor -------------------
 
