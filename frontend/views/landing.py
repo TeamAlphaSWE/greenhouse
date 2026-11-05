@@ -5,6 +5,8 @@ import requests
 
 
 
+
+
    
 
 
@@ -124,128 +126,84 @@ def update_dashboard():
     st.line_chart(chart_data, x="Date", y=["Temperature", "Humidity"])
 
 
-
-
-
-
  # Customization for sensor display cards and expandable sections
     st.subheader("Sensor Display")
 
  #Getting hardware ids / sensor identifiers from the backend
-    sensor_id = []
     response = requests.get(f"{BACKEND_URL}/api/v1/sensors")
     response.raise_for_status()
-    sensor_id = [sensor.get("id") for sensor in response.json().get("sensors", [])]
+    sensors = response.json().get("sensors", [])
+    sensor_id = [sensor["id"] for sensor in sensors]
 
+    
 # Overwriting the sensor IDs with custom names for display purposes!!!
     
 
 #Getting the list of assigned zones...
     response = requests.get(f"{BACKEND_URL}/api/v1/zones")
     response.raise_for_status()
-    areas = [
+    zones = response.json().get("zones", [])
+
+    area_names = [
         area.get("name")
-        for zone in response.json().get("zones", [])
+        for zone in zones
         for area in zone.get("areas", [])
     ]
 
 #Getting the latest temperature, humidity, and battery data for each sensor
+
+# Creating four empty dictionaries  using the sensor ID as a key
     temp_id = {}
     humidity_id = {}
     battery_id = {}
     timestamp = {}
-
-    name_1 = sensor_id[0]
-    name_2 = sensor_id[1]
-    name_3 = sensor_id[2]
-
-# Fetching and processing sensor data for the first three sensors
-    sensor_response = requests.get(f"{BACKEND_URL}/api/v1/sensor_data/{name_1}")
-    sensor_response.raise_for_status()
-    sensor_data = sensor_response.json().get("sensor_data", [])
-    latest = sensor_data[-1] if sensor_data else {}
-    values = latest.get("values", [])
-    timestamp[name_1] = pd.to_datetime(latest.get("timestamp")).strftime("%Y-%m-%d %I:%M %p")
-
-    for value in values:
-        if value.get("type") == "temperature":
-            temp_id[name_1] = value.get("value")
-        elif value.get("type") == "humidity":
-            humidity_id[name_1] = value.get("value")
-        elif value.get("type") == "battery":
-            battery_id[name_1] = value.get("value")
-    
-    sensor_response = requests.get(f"{BACKEND_URL}/api/v1/sensor_data/{name_2}")
-    sensor_response.raise_for_status()
-    sensor_data = sensor_response.json().get("sensor_data", [])
-    latest = sensor_data[-1] if sensor_data else {}
-    values = latest.get("values", [])
-    # -------------Converting Date to a readable format using strftime!--------------
-    # %B FULL MONTH NAME
-    # %b SHORT MONTH NAME
-    # %d DAY OF THE MONTH
-    # %m MONTH AS A NUMBER
-    # %Y FOUR-DIGIT YEAR
-    # %H HOUR (24-HOUR CLOCK)
-    # %I HOUR (12-HOUR CLOCK)
-    # %M MINUTE
-    # %S SECOND
-    # %p AM/PM
-    #
-    timestamp[name_2] = pd.to_datetime(latest.get("timestamp")).strftime("%Y-%m-%d %I:%M %p")
     
 
-    for value in values:
-        if value.get("type") == "temperature":
-            temp_id[name_2] = value.get("value")
-        elif value.get("type") == "humidity":
-            humidity_id[name_2] = value.get("value")
-        elif value.get("type") == "battery":
-            battery_id[name_2] = value.get("value")
+    # Loops through every sensor ID
+    for sensor_name in sensor_id:
+        sensor_response = requests.get(f"{BACKEND_URL}/api/v1/sensor_data/{sensor_name}")
+        sensor_response.raise_for_status()
+        sensor_data = sensor_response.json().get("sensor_data", [])
+        latest = sensor_data[-1] if sensor_data else {}
+        values = latest.get("values", [])
 
-    sensor_response = requests.get(f"{BACKEND_URL}/api/v1/sensor_data/{name_3}")
-    sensor_response.raise_for_status()
-    sensor_data = sensor_response.json().get("sensor_data", [])
-    latest = sensor_data[-1] if sensor_data else {}
-    values = latest.get("values", [])
-    timestamp[name_3] = pd.to_datetime(latest.get("timestamp")).strftime("%Y-%m-%d %I:%M %p")
+        latest_timestamp = latest.get("timestamp")
+        #Converting timestamp into something more readable
+        timestamp[sensor_name] = (
+            pd.to_datetime(latest_timestamp).strftime("%Y-%m-%d %I:%M %p")
+            if latest_timestamp
+            else "N/A"
+        )
 
-    for value in values:
-        if value.get("type") == "temperature":
-            temp_id[name_3] = value.get("value")
-        elif value.get("type") == "humidity":
-            humidity_id[name_3] = value.get("value")
-        elif value.get("type") == "battery":
-            battery_id[name_3] = value.get("value")
+        for value in values:
+            value_type = value.get("type")
+            value_data = value.get("value")
+
+            if value_type == "temperature":
+                temp_id[sensor_name] = value_data
+            elif value_type == "humidity":
+                humidity_id[sensor_name] = value_data
+            elif value_type == "battery":
+                battery_id[sensor_name] = value_data
+
         
-
+# Dynmaically adding expanders for each sensors added!
 # Displaying zone details for the first three sensors
-    with st.expander("Zone Details 1"):
-       
-        st.write(f"Sensor Name: {sensor_id[0]}")
-        st.write(f"Assigned Zone: Leader's Home")
-        st.write(f"Latest Temperature: {temp_id.get(name_1, 'N/A')}")
-        st.write(f"Latest Humidity: {humidity_id.get(name_1, 'N/A')}")
-        st.write(f"Battery Percentage: {battery_id.get(name_1, 'N/A')}")
-        st.write(f"Last Reported Timestamp: {timestamp.get(name_1, 'N/A')}")
+    for index, sensor_name in enumerate(sensor_id): # This class functions like an iterator...starting num is 0 and increases index!
+        area_name = (
+            area_names[index]
+            if index < len(area_names)
+            else "Unassigned"
+        )
+        with st.expander(f"Sensor {index + 1}"): # makes new expanders!
+            st.write(f"Sensor Name: {sensor_name} ")
+            st.write(f"Assigned Area: {area_name}")
+            st.write(f"Latest Temperature: {temp_id.get(sensor_name, 'N/A')}")
+            st.write(f"Latest Humidity: {humidity_id.get(sensor_name, 'N/A')}")
+            st.write(f"Battery Percentage: {battery_id.get(sensor_name, 'N/A')}")
+            st.write(f"Last Reported Timestamp: {timestamp.get(sensor_name, 'N/A')}")
 
-    with st.expander("Zone Details 2"):
-        
-        st.write(f"Sensor Name: {sensor_id[1]}")
-        st.write(f"Assigned Zone: {areas[0]}")
-        st.write(f"Latest Temperature: {temp_id.get(name_2, 'N/A')}")
-        st.write(f"Latest Humidity: {humidity_id.get(name_2, 'N/A')}")
-        st.write(f"Battery Percentage: {battery_id.get(name_2, 'N/A')}")
-        st.write(f"Last Reported Timestamp: {timestamp.get(name_2, 'N/A')}")
-
-    with st.expander("Zone Details 3"):
-        
-        st.write(f"Sensor Name: {sensor_id[2]}")
-        st.write(f"Assigned Zone: N/A")
-        st.write(f"Latest Temperature: {temp_id.get(name_3, 'N/A')}")
-        st.write(f"Latest Humidity: {humidity_id.get(name_3, 'N/A')}")
-        st.write(f"Battery Percentage: {battery_id.get(name_3, 'N/A')}")
-        st.write(f"Last Reported Timestamp: {timestamp.get(name_3, 'N/A')}")
+    
 
 #-------------- Line chart Displaying Historical Data for specific sensor -------------------
 
