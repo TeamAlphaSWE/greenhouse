@@ -1,10 +1,9 @@
 [Unit]
 Description=Greenhouse MQTT broker
-# CHANGED: removed After=network-online.target (no effect in user units)
 
 [Service]
 WorkingDirectory=%h/app/greenhouse_gateway
-ExecStart=%h/.local/bin/amqtt --config %h/app/greenhouse_gateway/broker.yaml
+ExecStart=%h/.local/bin/amqtt -c %h/app/greenhouse_gateway/broker.yaml
 Restart=always
 RestartSec=3
 
