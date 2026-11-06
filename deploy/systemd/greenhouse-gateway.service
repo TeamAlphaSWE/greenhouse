@@ -1,6 +1,6 @@
 [Unit]
 Description=Greenhouse gateway
-# CHANGED: next two lines (was: After=network-online.target)
+
 Wants=greenhouse-broker.service
 After=greenhouse-broker.service
 
