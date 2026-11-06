@@ -1,6 +1,7 @@
 import pandas as pd
 import requests
 import streamlit as st
+from sensor_api import get_sensors, get_zones, readings_to_frame
 
 # NOT FINISHED YET #
 st.title("Zones")
@@ -20,7 +21,7 @@ def update_dashboard():
         return
     
     zone_options = {z["id"]: z.get("name") or z["status"] for z in zones}
-    selected_id = st.segmented_control(
+    zone_id = st.segmented_control(
         "Choose a zone",
         options = list(zone_options.keys()),
         format_func = lambda name: zone_options[name],
@@ -28,23 +29,13 @@ def update_dashboard():
         default = next(iter(zone_options))
     )
 
-    if selected_id is None:
+    zone = next(z for z in zones if z["id"] == zone_id)
+    if zone_id is None:
         st.write("Please select a zone.")
         return
-    for z in zones:
-        st.write(f"**Status:** {z.get("status")}")
-        st.write(f"**Info:** {z.get("description")}")
-        for a in z['areas']: # this accesses array containing objects
-            st.write(f"**Name:** {a.get("name")}")
-        for s in sensors:
-            if s.get('zone_id') is z.get("id"):
-                assigned = True
-                assigned_sensor = s.get('zone_id')
-                break
-        if assigned is False:
-            st.write(f"**Assigned Sensor:** Unassigned")
-        if assigned is True:
-            st.write(f"**Assigned Sensor:** " + assigned_sensor)
+
+    st.subheader("Zone Information")
+    st.write(f"**Status:** {zone.get('status', 'Unknown')}")
+    st.write(f"**Info:** {zone.get('description', 'N/A')}")
     # -------------------- CHARTS --------------------------
-    
 update_dashboard()
