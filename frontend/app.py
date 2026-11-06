@@ -21,4 +21,8 @@ else:
         [landing, sensors_page, alert, settings, credits]
     )
 
+if st.session_state.get("_last_page") != nav.title:
+    st.session_state.pop("activating_sensor_id", None)
+st.session_state["_last_page"] = nav.title
+
 nav.run()

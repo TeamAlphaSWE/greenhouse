@@ -26,6 +26,26 @@ def get_sensor_data(sensor_id):
     return _get(f"/api/v1/sensor_data/{sensor_id}").get("sensor_data", [])
 
 
+def get_latest_sensor_data(sensor_id):
+    response = requests.get(
+        f"{BACKEND_URL}/api/v1/sensor_data/{sensor_id}/latest", timeout=TIMEOUT_SECONDS
+    )
+    if response.status_code == 404:
+        return None
+    response.raise_for_status()
+    return response.json().get("sensor_data")
+
+
+def activate_sensor(sensor_id, name, area_id):
+    response = requests.patch(
+        f"{BACKEND_URL}/api/v1/sensors/{sensor_id}",
+        json={"name": name, "area_id": area_id},
+        timeout=TIMEOUT_SECONDS,
+    )
+    response.raise_for_status()
+    return response.json().get("sensor")
+
+
 def readings_to_frame(readings):
     """Turn sensor_data records into one row per reading, one column per value type.
 
