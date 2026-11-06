@@ -179,9 +179,13 @@ st.markdown(
         margin: 8px 0 28px;
     }}
 
+    [data-testid="stTextInputRootElement"] {{
+        height: 56px !important;
+        border-radius: 10px !important;
+    }}
+
     [data-testid="stTextInput"] input {{
-        height: 56px;
-        border-radius: 10px;
+        padding: 0 16px !important;
         font-size: 16px;
     }}
 
