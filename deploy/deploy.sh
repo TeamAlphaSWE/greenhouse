@@ -21,6 +21,8 @@ failed() {
 trap failed ERR
 for attempt in {1..30}; do
     if systemctl --user is-active --quiet greenhouse-broker greenhouse-gateway &&
+        ss -ltn | grep ':8883 ' >/dev/null &&
+       [ "$(systemctl --user show greenhouse-broker -p NRestarts --value)" = 0 ] &&
        curl --max-time 3 -fsS http://127.0.0.1:15125/_stcore/health >/dev/null &&
        curl --max-time 3 -fsS http://127.0.0.1:15125/api/v1/health >/dev/null &&
        curl --max-time 3 -fsS -X POST http://127.0.0.1:15125/_greenhouse_transport/session \
