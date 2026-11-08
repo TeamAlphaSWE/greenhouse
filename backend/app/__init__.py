@@ -28,5 +28,8 @@ def create_app(config=None):
 
     from app.routes.sensor_data import sensor_data
     app.register_blueprint(sensor_data)
+    
+    from app.routes.alerts import alerts
+    app.register_blueprint(alerts)
 
     return app
