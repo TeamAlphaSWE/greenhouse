@@ -30,10 +30,10 @@ class SensorDataRepository(Repository):
             for row in self.collection.aggregate(pipeline)
         }
     
-    def create_reading(self, sensor_id: str, values: list[dict]) -> dict:
+    def create_reading(self, sensor_id: str, values: list[dict], timestamp: datetime | None = None) -> dict:
         return self.create({
             "sensor_id": ObjectId(sensor_id),
-            "timestamp": datetime.now(timezone.utc),
+            "timestamp": timestamp or datetime.now(timezone.utc),
             "values": values,
         })
 
