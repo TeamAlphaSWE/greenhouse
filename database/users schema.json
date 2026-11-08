@@ -6,7 +6,7 @@
     "admin",
     "created_at",
     "password_hash",
-    "updated at",
+    "updated_at",
     "username"
   ],
   "properties": {
@@ -22,7 +22,7 @@
     "password_hash": {
       "type": "string"
     },
-    "updated at": {
+    "updated_at": {
       "$ref": "#/$defs/Date"
     },
     "username": {
