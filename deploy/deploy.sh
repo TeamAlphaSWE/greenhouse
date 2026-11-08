@@ -6,21 +6,24 @@ exec 9>"$HOME/.greenhouse-deploy.lock"
 flock -n 9 || { echo 'Another deployment is running'; exit 1; }
 [ -f .env ] || { echo 'Missing ~/app/.env (database configuration)'; exit 1; }
 # Use the same interpreter as systemd and never refill the download cache.
-/usr/bin/python3 -m pip install --user --no-cache-dir -r backend/requirements.txt -r frontend/requirements.txt
+/usr/bin/python3 -m pip install --user --no-cache-dir -r backend/requirements.txt -r frontend/requirements.txt -r greenhouse_gateway/requirements.txt
 mkdir -p "$HOME/.config/systemd/user" "$HOME/app/proxy/run"
 # Validate before restarting the services.
 /usr/sbin/nginx -t -c "$HOME/app/proxy/proxy.conf"
 cp deploy/systemd/*.service "$HOME/.config/systemd/user/"
 systemctl --user daemon-reload
-systemctl --user enable greenhouse-backend greenhouse-frontend greenhouse-proxy
-systemctl --user restart greenhouse-backend greenhouse-frontend greenhouse-proxy
+systemctl --user enable greenhouse-backend greenhouse-frontend greenhouse-proxy greenhouse-gateway greenhouse-broker
+systemctl --user restart greenhouse-backend greenhouse-frontend greenhouse-proxy greenhouse-broker greenhouse-gateway
 failed() {
-    systemctl --user --no-pager --full status greenhouse-backend greenhouse-frontend greenhouse-proxy || true
-    journalctl --user -u greenhouse-frontend -u greenhouse-backend -u greenhouse-proxy -n 60 --no-pager || true
+    systemctl --user --no-pager --full status greenhouse-backend greenhouse-frontend greenhouse-proxy greenhouse-broker greenhouse-gateway || true
+    journalctl --user -u greenhouse-frontend -u greenhouse-backend -u greenhouse-proxy -u greenhouse-broker -u greenhouse-gateway -n 60 --no-pager || true
 }
 trap failed ERR
 for attempt in {1..30}; do
-    if curl --max-time 3 -fsS http://127.0.0.1:15125/_stcore/health >/dev/null &&
+    if systemctl --user is-active --quiet greenhouse-broker greenhouse-gateway &&
+        ss -ltn | grep ':8883 ' >/dev/null &&
+       [ "$(systemctl --user show greenhouse-broker -p NRestarts --value)" = 0 ] &&
+       curl --max-time 3 -fsS http://127.0.0.1:15125/_stcore/health >/dev/null &&
        curl --max-time 3 -fsS http://127.0.0.1:15125/api/v1/health >/dev/null &&
        curl --max-time 3 -fsS -X POST http://127.0.0.1:15125/_greenhouse_transport/session \
            -H 'Content-Type: application/json' -H 'X-Greenhouse-Transport: 1' \
