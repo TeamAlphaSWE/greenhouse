@@ -1,3 +1,5 @@
+from datetime import datetime, timezone
+
 from bson import ObjectId
 from pymongo.errors import PyMongoError
 import pytest
@@ -404,3 +406,44 @@ def test_create_sensor_data_no_alert_for_dangling_area_id(app, client):
         alert_count = get_collection("alerts").count_documents({})
 
     assert alert_count == 0
+
+
+def test_create_sensor_data_without_timestamp_uses_server_time(app, client):
+    before = datetime.now(timezone.utc).replace(tzinfo=None, microsecond=0)
+
+    response = client.post("/api/v1/sensor_data", json=valid_reading())
+    reading_id = response.get_json()["sensor_data"]["id"]
+
+    with app.app_context():
+        reading = get_collection("sensor_data").find_one({"_id": ObjectId(reading_id)})
+
+    after = datetime.now(timezone.utc).replace(tzinfo=None)
+    assert response.status_code == 201
+    assert before <= reading["timestamp"].replace(tzinfo=None) <= after
+
+
+def test_create_sensor_data_with_timestamp_stores_it(app, client):
+    body = valid_reading(timestamp="2026-11-02T14:05:00Z")
+
+    response = client.post("/api/v1/sensor_data", json=body)
+    reading_id = response.get_json()["sensor_data"]["id"]
+
+    with app.app_context():
+        reading = get_collection("sensor_data").find_one({"_id": ObjectId(reading_id)})
+
+    assert response.status_code == 201
+    assert reading["timestamp"].replace(tzinfo=None) == datetime(2026, 11, 2, 14, 5)
+
+
+@pytest.mark.parametrize("timestamp", [
+    "not-a-date",
+    "2026-11-02T14:05:00",
+    "2026-11-02T09:05:00-05:00",
+    1762092300,
+    None,
+])
+def test_create_sensor_data_invalid_timestamp_returns_400(client, timestamp):
+    response = client.post("/api/v1/sensor_data", json=valid_reading(timestamp=timestamp))
+
+    assert response.status_code == 400
+    assert response.get_json() == {"error": "timestamp must be a UTC ISO 8601 string"}

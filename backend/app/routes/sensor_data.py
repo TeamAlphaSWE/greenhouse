@@ -1,4 +1,4 @@
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 from flask import Blueprint, current_app, jsonify, request
 from pymongo.errors import PyMongoError
@@ -53,12 +53,13 @@ def create_sensor_data():
         return jsonify({"error": error}), 400
 
     values = [{"type": v["type"], "value": v["value"]} for v in data["values"]]
+    timestamp = _parse_timestamp(data.get("timestamp"))
 
     try:
         sensor = sensor_repository.find_by_hardware_id(data["hardware_id"])
         if sensor is None:
             sensor = sensor_repository.create_pending(data["hardware_id"])
-        reading = sensor_data_repository.create_reading(sensor["id"], values)
+        reading = sensor_data_repository.create_reading(sensor["id"], values, timestamp)
     except PyMongoError:
         current_app.logger.exception("Failed to save sensor data")
         return jsonify({"error": "Unexpected server error"}), 500
@@ -129,4 +130,20 @@ def _validate_reading(data):
         if isinstance(value, bool) or not isinstance(value, (int, float)):
             return "each value needs a numeric value"
 
+    if "timestamp" in data and _parse_timestamp(data["timestamp"]) is None:
+        return "timestamp must be a UTC ISO 8601 string"
+
     return None
+
+
+def _parse_timestamp(value):
+    """Parse a UTC ISO 8601 string like 2026-11-02T14:05:00Z. Returns None if missing or invalid."""
+    if not isinstance(value, str):
+        return None
+    try:
+        parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    if parsed.utcoffset() != timedelta(0):
+        return None
+    return parsed
