@@ -2,6 +2,7 @@
 from datetime import datetime, time, timedelta, timezone
 import os
 
+import altair as alt
 import pandas as pd
 import requests
 import streamlit as st
@@ -38,6 +39,30 @@ def filter_history(frame, start=None, end=None):
         mask &= frame["Date"] < end
     return frame.loc[mask].copy()
 
+def history_chart(frame):
+    """Line chart of temperature and humidity whose hover tooltip shows date and time (UTC)."""
+    data = frame.melt(id_vars="Date", value_vars=["Temperature", "Humidity"],
+                      var_name="Reading", value_name="Value").dropna(subset=["Value"])
+    data["Time (UTC)"] = data["Date"].dt.strftime("%Y-%m-%d %H:%M UTC")
+    data["Date"] = data["Date"].dt.tz_convert(None)  # plot UTC as-is, not browser local time
+
+    hover = alt.selection_point(fields=["Date"], nearest=True, on="pointerover",
+                                empty=False, clear="pointerout")
+    base = alt.Chart(data).encode(
+        x=alt.X("Date:T", title="Date (UTC)", scale=alt.Scale(type="utc"),
+                axis=alt.Axis(format="%b %d %H:%M")),
+        y=alt.Y("Value:Q", title=None),
+        color=alt.Color("Reading:N", title=None,
+                        scale=alt.Scale(domain=["Temperature", "Humidity"],
+                                        range=["#28734f", "#91b44c"])),
+    )
+    lines = base.mark_line()
+    points = base.mark_circle(size=70).encode(
+        opacity=alt.condition(hover, alt.value(1), alt.value(0)),
+        tooltip=[alt.Tooltip("Time (UTC):N"), alt.Tooltip("Reading:N"),
+                 alt.Tooltip("Value:Q", format="g")],
+    ).add_params(hover)
+    return (lines + points).properties(height=360)
 
 st.markdown("""
 <style>
@@ -149,8 +174,7 @@ def update_dashboard():
         if filtered.empty:
             st.info("No sensor data available for this range. Try All history or different dates.")
             return
-        st.line_chart(filtered, x="Date", y=["Temperature", "Humidity"],
-                      color=["#28734f", "#91b44c"], width="stretch", height=360)
+        st.altair_chart(history_chart(filtered), width="stretch")
         st.caption(f"{len(filtered):,} readings · "
                    f"{filtered['Date'].min():%Y-%m-%d %H:%M} — "
                    f"{filtered['Date'].max():%Y-%m-%d %H:%M} UTC")
