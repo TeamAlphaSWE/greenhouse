@@ -17,11 +17,9 @@ def history_frame(readings, sensor_id):
         if str(reading.get("sensor_id", sensor_id)) != str(sensor_id):
             continue
         values = {v.get("type"): v.get("value") for v in reading.get("values", [])}
-        rows.append({"Date": reading.get("timestamp"),
-                     "Temperature": values.get("temperature"),
-                     "Humidity": values.get("humidity")})
+        rows.append({"Date": reading.get("timestamp"),"Temperature": values.get("temperature"),"Humidity": values.get("humidity")})
     frame = pd.DataFrame(rows, columns=["Date", "Temperature", "Humidity"])
-    frame["Date"] = pd.to_datetime(frame["Date"], utc=True, errors="coerce")
+    frame["Date"] = pd.to_datetime(frame["Date"], utc=True, errors="coerce", format="ISO8601")
     for column in ["Temperature", "Humidity"]:
         frame[column] = pd.to_numeric(frame[column], errors="coerce")
     return (frame.dropna(subset=["Date"])

@@ -62,5 +62,5 @@ def readings_to_frame(readings):
     frame = pd.DataFrame(rows, columns=["Date", "temperature", "humidity", "battery"])
     if frame.empty:
         return frame
-    frame["Date"] = pd.to_datetime(frame["Date"], utc=True)
+    frame["Date"] = pd.to_datetime(frame["Date"], utc=True, format="ISO8601")
     return frame.sort_values("Date").reset_index(drop=True)
