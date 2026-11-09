@@ -40,6 +40,27 @@ def filter_history(frame, start=None, end=None):
     return frame.loc[mask].copy()
 
 
+STATUS_DISPLAY = {
+    "normal": {"icon": "✓", "label": "In range", "dot": "#3fb950", "badge": "green"},
+    "out_of_range": {"icon": "⚠", "label": "Alert", "dot": "#f85149", "badge": "red"},
+    "offline_unknown": {"icon": "?", "label": "Offline/Unknown", "dot": "#8b949e", "badge": "gray"},
+}
+
+
+def area_kpis(summary):
+    """(total, within range, needs attention) from an /areas/overview summary."""
+    return (
+        summary.get("total", 0),
+        summary.get("normal", 0),
+        summary.get("out_of_range", 0) + summary.get("offline_unknown", 0),
+    )
+
+
+def chunk(items, size):
+    """Split a list into row-sized pieces for a column grid."""
+    return [items[i:i + size] for i in range(0, len(items), size)]
+
+
 st.markdown("""
 <style>
 .gh-dashboard-hero { background:#123d2d; color:#fffdf4; padding:28px 30px;
@@ -49,9 +70,29 @@ st.markdown("""
 .gh-dashboard-hero h1 { color:#fffdf4; font-size:clamp(28px,5vw,42px);
  margin:0; padding:0; line-height:1.2; }
 .st-key-sensor_trends { border:1px solid #dce4d6; border-radius:18px; padding:20px; }
+.st-key-area_overview_card { background:#060607; border-radius:20px; padding:26px 28px 22px;
+ margin-bottom:24px; }
+.st-key-area_overview_card h2, .st-key-area_overview_card h3, .st-key-area_overview_card h4,
+.st-key-area_overview_card p, .st-key-area_overview_card span, .st-key-area_overview_card label {
+ color:#ededed; }
+.st-key-area_overview_card small { color:#8b8f94; }
+.st-key-area_overview_card [data-testid="stMetric"] { text-align:center; }
+.st-key-area_overview_card [data-testid="stMetricLabel"] { color:#8b8f94; justify-content:center; }
+.st-key-area_overview_card hr { border-color:#242424; }
+div[class*="st-key-area-tile-normal-"] { background:#04100a; border-radius:12px; padding:10px 14px 4px; }
+div[class*="st-key-area-tile-out_of_range-"] { background:#1b0909; border-radius:12px; padding:10px 14px 4px; }
+div[class*="st-key-area-tile-offline_unknown-"] { background:#141414; border-radius:12px; padding:10px 14px 4px; }
+div[class*="st-key-area-tile-"] h4 { margin:2px 0 6px; font-size:1.4rem; }
+div[class*="st-key-area-tile-"] button { background:transparent !important; border:none !important;
+ box-shadow:none !important; padding:0 !important; }
+div[class*="st-key-area-tile-normal-"] button p { color:#40c977; font-size:1.1rem; }
+div[class*="st-key-area-tile-out_of_range-"] button p { color:#ff6764; font-size:1.1rem; }
+div[class*="st-key-area-tile-offline_unknown-"] button p { color:#8b8f94; font-size:1.1rem; }
+.st-key-area_detail { border:1px solid #242424; border-radius:14px; padding:16px 20px; }
 @media(max-width:540px) {
  .gh-dashboard-hero { padding:22px 18px; }
  .st-key-sensor_trends { padding:12px; }
+ .st-key-area_overview_card { padding:18px 16px; }
 }
 </style>
 <header class="gh-dashboard-hero"><p>Greenhouse Project / Dashboard</p>
@@ -104,6 +145,76 @@ def update_dashboard():
                 with st.container(horizontal=True, horizontal_alignment="right"):
                     st.page_link("views/sensors.py", label="Review")
 
+    unit = temperature_unit()
+    area_to_sensor = {s["area_id"]: s["id"] for s in sensors if s.get("area_id")}
+    try:
+        overview = api_get("/api/v1/areas/overview")
+    except (requests.RequestException, ValueError):
+        st.error("Unable to load the area overview.")
+    else:
+        area_entries = [(zone, area) for zone in overview["zones"] for area in zone["areas"]]
+        areas_by_id = {area["id"]: (zone, area) for zone, area in area_entries}
+
+        with st.container(key="area_overview_card"):
+            st.markdown("### Greenhouse Overview")
+
+            total, normal, attention = area_kpis(overview["summary"])
+            kpi_cols = st.columns(3)
+            kpi_cols[0].metric("Areas", total)
+            kpi_cols[1].metric("In range", normal)
+            kpi_cols[2].metric("Attention", attention)
+
+            header_col, legend_col = st.columns([3, 2])
+            header_col.markdown("#### Area map")
+            legend = "&nbsp;&nbsp;&nbsp;".join(
+                f'<span style="color:{v["dot"]}">●</span> {v["label"]}'
+                for v in STATUS_DISPLAY.values()
+            )
+            legend_col.markdown(f'<div style="text-align:right; padding-top:14px;">{legend}</div>',
+                                unsafe_allow_html=True)
+
+            if not area_entries:
+                st.info("No areas configured yet.")
+            for row in chunk(area_entries, 4):
+                cols = st.columns(4)
+                for col, (zone, area) in zip(cols, row):
+                    sensor_id = area_to_sensor.get(area["id"])
+                    status = STATUS_DISPLAY[area["state"]]
+                    temperature = to_display(area["temperature"], unit)
+                    temp_text = f"{temperature:g}{unit}" if temperature is not None else "—"
+                    tile_name = f"{zone.get('name') or 'Unassigned'} - {area.get('name') or 'Unnamed'}"
+                    with col:
+                        with st.container(key=f"area-tile-{area['state']}-{area['id']}"):
+                            st.caption(tile_name)
+                            st.markdown(f"#### {temp_text}")
+                            if st.button(status["icon"], key=f"area-btn-{area['id']}",
+                                         help=status["label"], disabled=sensor_id is None,
+                                         use_container_width=True):
+                                st.session_state["selected_area_id"] = area["id"]
+                                st.session_state["trend_sensor"] = sensor_id
+                                st.rerun()
+
+            if area_entries:
+                st.caption("Tap an area to inspect it.")
+                st.divider()
+
+            selected_area_id = st.session_state.get("selected_area_id")
+            zone, selected_area = areas_by_id.get(selected_area_id, (None, None))
+            if selected_area:
+                status = STATUS_DISPLAY[selected_area["state"]]
+                temperature = to_display(selected_area["temperature"], unit)
+                low = to_display(selected_area["temperature_min"], unit)
+                high = to_display(selected_area["temperature_max"], unit)
+                range_text = f"{low:g}–{high:g}{unit}" if low is not None and high is not None else "Not configured"
+                with st.container(key="area_detail"):
+                    title_col, badge_col = st.columns([3, 1])
+                    title_col.markdown(f"**{zone.get('name') or 'Unassigned'} - {selected_area.get('name') or 'Unnamed'}**")
+                    badge_col.badge(status["label"], color=status["badge"])
+                    st.write(f"Current temperature: {temperature:g}{unit}" if temperature is not None else "Current temperature: —")
+                    if selected_area["humidity"] is not None:
+                        st.write(f"Current humidity: {selected_area['humidity']:g}%")
+                    st.write(f"Required range: {range_text}")
+
     sensor_options = {s["id"]: s.get("name") or s.get("hardware_id") or s["id"]
                       for s in sensors}
     # Clear a removed sensor selection before creating its widget.
@@ -142,7 +253,6 @@ def update_dashboard():
             return
         frame = history_frame(readings, selected_id)
         filtered = filter_history(frame, start, end)
-        unit = temperature_unit()
         filtered["Temperature"] = to_display(filtered["Temperature"], unit)
         st.caption(f"Sensor: {sensor_options[selected_id]} · All times UTC · "
                    f"Temperature and humidity share one Y-axis. Temperature in {unit}, humidity in %.")
