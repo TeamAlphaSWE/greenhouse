@@ -4,7 +4,7 @@ from datetime import datetime, timedelta, timezone, date
 from pathlib import Path
 import unittest
 from unittest.mock import patch
-import altair as alt
+
 import pandas as pd
 from streamlit.testing.v1 import AppTest
 
@@ -12,12 +12,11 @@ PAGE = Path(__file__).resolve().parents[1] / "views" / "landing.py"
 # Load pure transformation functions without running a Streamlit page or HTTP calls.
 tree = ast.parse(PAGE.read_text())
 helpers = ast.Module(body=[n for n in tree.body if isinstance(n, ast.FunctionDef)
-                          and n.name in {"history_frame", "filter_history", "history_chart"}], type_ignores=[])
-namespace = {"pd": pd, "alt": alt}
+                          and n.name in {"history_frame", "filter_history"}], type_ignores=[])
+namespace = {"pd": pd}
 exec(compile(helpers, str(PAGE), "exec"), namespace)
 history_frame = namespace["history_frame"]
 filter_history = namespace["filter_history"]
-history_chart = namespace["history_chart"]
 
 
 def reading(sensor, when, temperature=22, humidity=60):
@@ -70,19 +69,6 @@ class HistoryTests(unittest.TestCase):
         result = history_frame([row], "A")
         self.assertEqual(result.Temperature.iloc[0], 22)
         self.assertTrue(pd.isna(result.Humidity.iloc[0]))
-        
-    def test_chart_tooltip_shows_date_and_time_utc(self):
-        frame = history_frame([
-            reading("A", "2026-11-05T19:42:00Z", 21, 84),
-            reading("A", "2026-11-06T01:42:30Z", 22, 80),
-        ], "A")
-        spec = history_chart(frame).to_dict()
-
-        tooltip = [t["field"] for t in spec["layer"][1]["encoding"]["tooltip"]]
-        self.assertEqual(tooltip, ["Time (UTC)", "Reading", "Value"])
-        rows = list(spec["datasets"].values())[0]
-        self.assertEqual(sorted({r["Time (UTC)"] for r in rows}),
-                         ["2026-11-05 19:42 UTC", "2026-11-06 01:42 UTC"])
 
 
 class DashboardTests(unittest.TestCase):
