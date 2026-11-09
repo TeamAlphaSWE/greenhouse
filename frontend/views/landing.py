@@ -6,6 +6,7 @@ import pandas as pd
 import requests
 import streamlit as st
 
+from charts import time_series_chart
 from units import temperature_unit, to_display
 
 BACKEND_URL = os.environ.get("BACKEND_URL", "https://greenhouse.kentcs.org").rstrip("/")
@@ -151,8 +152,9 @@ def update_dashboard():
         if filtered.empty:
             st.info("No sensor data available for this range. Try All history or different dates.")
             return
-        st.line_chart(filtered, x="Date", y=["Temperature", "Humidity"],
-                      color=["#28734f", "#91b44c"], width="stretch", height=360)
+        st.altair_chart(time_series_chart(filtered, ["Temperature", "Humidity"],
+                                          colors=["#28734f", "#91b44c"], height=360),
+                        use_container_width=True)
         st.caption(f"{len(filtered):,} readings · "
                    f"{filtered['Date'].min():%Y-%m-%d %H:%M} — "
                    f"{filtered['Date'].max():%Y-%m-%d %H:%M} UTC")
