@@ -83,7 +83,7 @@ def update_dashboard():
 
     if selected_id is None:
         st.write("Select a sensor to view its data.")
-        
+        return
 
     response_sensor_data = requests.get(f"{BACKEND_URL}/api/v1/sensor_data/{selected_id}")
     response_sensor_data.raise_for_status()
@@ -117,10 +117,10 @@ def update_dashboard():
         st.write("No sensor data available.")
         return
 
-    chart_data["Date"] = pd.to_datetime(chart_data["Date"])# turning the JSON timestamp into a datetime object
+    chart_data["Date"] = pd.to_datetime(chart_data["Date"], format = "mixed", utc=True)# turning the JSON timestamp into a datetime object
     chart_data = chart_data.sort_values(by="Date")         # Sorting the chart data by Time for proper visualization
 
-#-------------- Line chart Displaying Temperature & Humidity for the selected sensor -------------------
+#-------------- Line chart Displaying Temperature & Humidity for the selectexd sensor -------------------
 
     st.subheader("Temperature & Humidity Over Time")
     st.line_chart(chart_data, x="Date", y=["Temperature", "Humidity"])
@@ -144,11 +144,15 @@ def update_dashboard():
     response.raise_for_status()
     zones = response.json().get("zones", [])
 
-    area_names = [
-        area.get("name")
+    area_names = {
+        area["id"]: area["name"]
         for zone in zones
         for area in zone.get("areas", [])
-    ]
+    }
+    zone_names = {
+        zone["id"]: zone["name"]
+        for zone in zones
+    }
 
 #Getting the latest temperature, humidity, and battery data for each sensor
 
@@ -190,14 +194,13 @@ def update_dashboard():
 # Dynmaically adding expanders for each sensors added!
 # Displaying zone details for the first three sensors
     for index, sensor_name in enumerate(sensor_id): # This class functions like an iterator...starting num is 0 and increases index!
-        area_name = (
-            area_names[index]
-            if index < len(area_names)
-            else "Unassigned"
-        )
+        sensor = next(sensor for sensor in sensors if sensor["id"] == sensor_name)
+        area_name = area_names.get(sensor.get("area_id"), "Unassigned")
+
         with st.expander(f"Sensor {index + 1}"): # makes new expanders!
             st.write(f"Sensor Name: {sensor_name} ")
-            st.write(f"Assigned Area: {area_name}")
+            st.write(f"Zone: {zone_names.get(sensor.get('zone_id'), 'Unassigned')}")
+            st.write(f"Area: {area_names.get(sensor.get('area_id'), 'Unassigned')}")
             st.write(f"Latest Temperature: {temp_id.get(sensor_name, 'N/A')}")
             st.write(f"Latest Humidity: {humidity_id.get(sensor_name, 'N/A')}")
             st.write(f"Battery Percentage: {battery_id.get(sensor_name, 'N/A')}")
