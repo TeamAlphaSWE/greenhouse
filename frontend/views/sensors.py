@@ -201,9 +201,6 @@ data = data.assign(temperature=to_display(data["temperature"], unit))
 
 st.subheader(f"Temperature ({unit})")
 st.altair_chart(time_series_chart(data, ["temperature"]), use_container_width=True)
-
-st.subheader("Humidity (%)")
-st.altair_chart(time_series_chart(data, ["humidity"]), use_container_width=True)
 st.subheader("Humidity (%)")
 st.altair_chart(time_series_chart(data, ["humidity"]), use_container_width=True)
 st.subheader("Battery (%)")
