@@ -6,6 +6,8 @@ import pandas as pd
 import requests
 import streamlit as st
 
+from units import temperature_unit, to_display
+
 BACKEND_URL = os.environ.get("BACKEND_URL", "https://greenhouse.kentcs.org").rstrip("/")
 RANGES = {"24 hours": 1, "7 days": 7, "30 days": 30}
 
@@ -139,8 +141,10 @@ def update_dashboard():
             return
         frame = history_frame(readings, selected_id)
         filtered = filter_history(frame, start, end)
+        unit = temperature_unit()
+        filtered["Temperature"] = to_display(filtered["Temperature"], unit)
         st.caption(f"Sensor: {sensor_options[selected_id]} · All times UTC · "
-                   "Temperature and humidity share one Y-axis. Values use stored sensor units.")
+                   f"Temperature and humidity share one Y-axis. Temperature in {unit}, humidity in %.")
         if start is not None:
             label_end = end - timedelta(microseconds=1) if period == "Custom" else end
             st.caption(f"Selected window: {start:%Y-%m-%d %H:%M} — {label_end:%Y-%m-%d %H:%M} UTC")
