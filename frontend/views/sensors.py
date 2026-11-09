@@ -1,7 +1,7 @@
 import pandas as pd
 import requests
 import streamlit as st
-
+from charts import time_series_chart
 from sensor_api import (
     activate_sensor,
     get_latest_sensor_data,
@@ -191,10 +191,9 @@ if len(date_range) == 2:
     data = data[(data["Date"].dt.date >= start) & (data["Date"].dt.date <= end)]
 
 st.subheader("Temperature (°C)")
-st.line_chart(data, x="Date", y="temperature")
+st.altair_chart(time_series_chart(data, ["temperature"]), width="stretch")
 
 st.subheader("Humidity (%)")
-st.line_chart(data, x="Date", y="humidity")
-
+st.altair_chart(time_series_chart(data, ["humidity"]), width="stretch")
 st.subheader("Battery (%)")
 st.line_chart(data, x="Date", y="battery")
