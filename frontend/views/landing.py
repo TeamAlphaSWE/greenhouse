@@ -159,5 +159,85 @@ def update_dashboard():
                    f"{filtered['Date'].min():%Y-%m-%d %H:%M} — "
                    f"{filtered['Date'].max():%Y-%m-%d %H:%M} UTC")
 
+ # Customization for sensor display cards and expandable sections
+    st.subheader("Sensor Display")
+
+ #Getting hardware ids / sensor identifiers from the backend
+    response = requests.get(f"{BACKEND_URL}/api/v1/sensors")
+    response.raise_for_status()
+    sensors = response.json().get("sensors", [])
+    sensor_id = [sensor["id"] for sensor in sensors]
+
+
+# Overwriting the sensor IDs with custom names for display purposes!!!
+
+
+#Getting the list of assigned zones...
+    response = requests.get(f"{BACKEND_URL}/api/v1/zones")
+    response.raise_for_status()
+    zones = response.json().get("zones", [])
+
+    area_names = {
+        area["id"]: area["name"]
+        for zone in zones
+        for area in zone.get("areas", [])
+    }
+    zone_names = {
+        zone["id"]: zone["name"]
+        for zone in zones
+    }
+
+#Getting the latest temperature, humidity, and battery data for each sensor
+
+# Creating four empty dictionaries  using the sensor ID as a key
+    temp_id = {}
+    humidity_id = {}
+    battery_id = {}
+    timestamp = {}
+
+
+    # Loops through every sensor ID
+    for sensor_name in sensor_id:
+        sensor_response = requests.get(f"{BACKEND_URL}/api/v1/sensor_data/{sensor_name}")
+        sensor_response.raise_for_status()
+        sensor_data = sensor_response.json().get("sensor_data", [])
+        latest = sensor_data[-1] if sensor_data else {}
+        values = latest.get("values", [])
+
+        latest_timestamp = latest.get("timestamp")
+        #Converting timestamp into something more readable
+        timestamp[sensor_name] = (
+            pd.to_datetime(latest_timestamp).strftime("%Y-%m-%d %I:%M %p")
+            if latest_timestamp
+            else "N/A"
+        )
+
+        for value in values:
+            value_type = value.get("type")
+            value_data = value.get("value")
+
+            if value_type == "temperature":
+                temp_id[sensor_name] = value_data
+            elif value_type == "humidity":
+                humidity_id[sensor_name] = value_data
+            elif value_type == "battery":
+                battery_id[sensor_name] = value_data
+
+
+# Dynmaically adding expanders for each sensors added!
+# Displaying zone details for the first three sensors
+    for index, sensor_name in enumerate(sensor_id): # This class functions like an iterator...starting num is 0 and increases index!
+        sensor = next(sensor for sensor in sensors if sensor["id"] == sensor_name)
+        area_name = area_names.get(sensor.get("area_id"), "Unassigned")
+
+        with st.expander(f"Sensor {index + 1}"): # makes new expanders!
+            st.write(f"Sensor Name: {sensor_name} ")
+            st.write(f"Zone: {zone_names.get(sensor.get('zone_id'), 'Unassigned')}")
+            st.write(f"Area: {area_names.get(sensor.get('area_id'), 'Unassigned')}")
+            st.write(f"Latest Temperature: {temp_id.get(sensor_name, 'N/A')}")
+            st.write(f"Latest Humidity: {humidity_id.get(sensor_name, 'N/A')}")
+            st.write(f"Battery Percentage: {battery_id.get(sensor_name, 'N/A')}")
+            st.write(f"Last Reported Timestamp: {timestamp.get(sensor_name, 'N/A')}")
+
 
 update_dashboard()
