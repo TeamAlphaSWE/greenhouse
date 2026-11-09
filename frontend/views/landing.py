@@ -73,7 +73,7 @@ def update_dashboard():
         return
     if not sensors:
         st.info("No sensors available.")
-        return
+        return    
     pending_count = sum(1 for s in sensors if s.get("status") == "pending")
     if pending_count:
         noun = "sensor is" if pending_count == 1 else "sensors are"
@@ -105,6 +105,21 @@ def update_dashboard():
 
     sensor_options = {s["id"]: s.get("name") or s.get("hardware_id") or s["id"]
                       for s in sensors}
+
+    # Change the dropdown if a card has been pressed
+    if st.session_state.pop("pending_zone_sensor", False):
+        selected_zone = st.session_state.get("selected_zone")
+        if selected_zone:
+            zone_sensor = next(
+                (
+                    s for s in sensors
+                    if str(s.get("zone_id")) == str(selected_zone)
+                ),
+                None
+            )
+            if zone_sensor and zone_sensor["id"] in sensor_options:
+                st.session_state["trend_sensor"] = zone_sensor["id"]
+
     # Clear a removed sensor selection before creating its widget.
     if st.session_state.get("trend_sensor") not in sensor_options:
         st.session_state.pop("trend_sensor", None)
@@ -154,6 +169,170 @@ def update_dashboard():
         st.caption(f"{len(filtered):,} readings · "
                    f"{filtered['Date'].min():%Y-%m-%d %H:%M} — "
                    f"{filtered['Date'].max():%Y-%m-%d %H:%M} UTC")
+        try: # Getting the cards out under the chart
+            zones = api_get("/api/v1/zones").get("zones", [])
+        except (requests.RequestException, ValueError):
+            st.error("Unable to load greenhouse zones.")
+            return
+
+        display_zone_cards(zones, sensors)
+
+
+# Getting readings for the cards
+def get_latest_reading(sensor_id):
+    try:
+        response = api_get(
+            f"/api/v1/sensor_data/{sensor_id}/latest"
+        )
+        reading = response.get("sensor_data", {})
+
+        values = {
+            item.get("type"): item.get("value")
+            for item in reading.get("values", [])
+        }
+
+        return {
+            "temperature": values.get("temperature"),
+            "humidity": values.get("humidity"),
+        }
+
+    except requests.RequestException:
+        return None
+    except (ValueError, TypeError, AttributeError):
+        return None
+
+
+
+
+# For getting limits on temp and humidity 
+def get_environment_status(zone, sensor, reading):
+    if sensor is None or reading is None:
+        return "No data"
+
+    area = next(
+        (
+            area for area in zone.get("areas", [])
+            if str(area.get("id")) == str(sensor.get("area_id"))
+        ),
+        None
+    )
+
+    if area is None:
+        return "Limits not configured"
+
+    conditions = area.get("target_conditions", {})
+    alerts = []
+
+    for measurement in ("temperature", "humidity"):
+        value = reading.get(measurement)
+        limits = conditions.get(measurement, {})
+
+        if value is None:
+            continue
+
+        minimum = limits.get("min")
+        maximum = limits.get("max")
+
+        if minimum is not None and value < minimum:
+            alerts.append(f"{measurement.title()} low")
+
+        if maximum is not None and value > maximum:
+            alerts.append(f"{measurement.title()} high")
+
+    return ", ".join(alerts) if alerts else "Normal"
+
+
+
+
+
+
+
+
+
+
+
+def display_zone_cards(zones, sensors):
+    st.subheader("Greenhouse Zones")
+
+    if not zones:
+        st.info("No greenhouse zones available.")
+        return
+
+    if "selected_zone" not in st.session_state:
+        st.session_state.selected_zone = None
+
+    columns_per_row = 3
+
+    for row_start in range(0, len(zones), columns_per_row):
+        columns = st.columns(columns_per_row)
+
+        for col, zone in zip(
+            columns,
+            zones[row_start:row_start + columns_per_row]
+        ):
+            zone_id = str(zone["id"])
+
+            # Find the sensor assigned to this zone
+            sensor = next(
+                (
+                    s for s in sensors
+                    if str(s.get("zone_id")) == zone_id
+                ),
+                None
+            )
+
+            # Retrieve its latest readings
+            reading = (
+                get_latest_reading(sensor["id"])
+                if sensor else None
+            )
+
+            temperature = (
+                reading.get("temperature")
+                if reading else None
+            )
+            humidity = (
+                reading.get("humidity")
+                if reading else None
+            )
+
+            status = get_environment_status(
+                zone, sensor, reading
+            )
+
+            with col:
+                with st.container(border=True):
+                    st.markdown(f"### {zone['name']}")
+
+                    st.metric(
+                        "Temperature",
+                        f"{temperature}°"
+                        if temperature is not None else "No data"
+                    )
+
+                    st.metric(
+                        "Humidity",
+                        f"{humidity}%"
+                        if humidity is not None else "No data"
+                    )
+
+                    if status == "Normal":
+                        st.success(status)
+                    elif status == "No data":
+                        st.info(status)
+                    elif status == "Limits not configured":
+                        st.info(status)
+                    else:
+                        st.warning(status)
+
+                    if st.button(
+                        "View zone",
+                        key=f"zone_{zone_id}",
+                        use_container_width=True
+                    ):
+                        st.session_state.selected_zone = zone_id
+                        st.session_state.pending_zone_sensor = True
+                        st.rerun()
 
 
 update_dashboard()
