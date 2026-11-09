@@ -6,6 +6,9 @@ import pandas as pd
 import requests
 import streamlit as st
 
+from charts import time_series_chart
+from units import temperature_unit, to_display
+
 BACKEND_URL = os.environ.get("BACKEND_URL", "https://greenhouse.kentcs.org").rstrip("/")
 RANGES = {"24 hours": 1, "7 days": 7, "30 days": 30}
 
@@ -71,7 +74,7 @@ def update_dashboard():
         return
     if not sensors:
         st.info("No sensors available.")
-        return
+        return    
     pending_count = sum(1 for s in sensors if s.get("status") == "pending")
     if pending_count:
         noun = "sensor is" if pending_count == 1 else "sensors are"
@@ -103,6 +106,21 @@ def update_dashboard():
 
     sensor_options = {s["id"]: s.get("name") or s.get("hardware_id") or s["id"]
                       for s in sensors}
+
+    # Change the dropdown if a card has been pressed
+    if st.session_state.pop("pending_zone_sensor", False):
+        selected_zone = st.session_state.get("selected_zone")
+        if selected_zone:
+            zone_sensor = next(
+                (
+                    s for s in sensors
+                    if str(s.get("zone_id")) == str(selected_zone)
+                ),
+                None
+            )
+            if zone_sensor and zone_sensor["id"] in sensor_options:
+                st.session_state["trend_sensor"] = zone_sensor["id"]
+
     # Clear a removed sensor selection before creating its widget.
     if st.session_state.get("trend_sensor") not in sensor_options:
         st.session_state.pop("trend_sensor", None)
@@ -139,19 +157,232 @@ def update_dashboard():
             return
         frame = history_frame(readings, selected_id)
         filtered = filter_history(frame, start, end)
+        unit = temperature_unit()
+        filtered["Temperature"] = to_display(filtered["Temperature"], unit)
         st.caption(f"Sensor: {sensor_options[selected_id]} · All times UTC · "
-                   "Temperature and humidity share one Y-axis. Values use stored sensor units.")
+                   f"Temperature and humidity share one Y-axis. Temperature in {unit}, humidity in %.")
         if start is not None:
             label_end = end - timedelta(microseconds=1) if period == "Custom" else end
             st.caption(f"Selected window: {start:%Y-%m-%d %H:%M} — {label_end:%Y-%m-%d %H:%M} UTC")
         if filtered.empty:
             st.info("No sensor data available for this range. Try All history or different dates.")
             return
-        st.line_chart(filtered, x="Date", y=["Temperature", "Humidity"],
-                      color=["#28734f", "#91b44c"], width="stretch", height=360)
+        st.altair_chart(time_series_chart(filtered, ["Temperature", "Humidity"],
+                                          colors=["#28734f", "#91b44c"], height=360),
+                        use_container_width=True)
         st.caption(f"{len(filtered):,} readings · "
                    f"{filtered['Date'].min():%Y-%m-%d %H:%M} — "
                    f"{filtered['Date'].max():%Y-%m-%d %H:%M} UTC")
+        try: # Getting the cards out under the chart
+            zones = api_get("/api/v1/zones").get("zones", [])
+        except (requests.RequestException, ValueError):
+            st.error("Unable to load greenhouse zones.")
+            return
+
+        display_zone_cards(zones, sensors)
+
+ # Customization for sensor display cards and expandable sections
+    st.subheader("Sensor Display")
+
+ #Getting hardware ids / sensor identifiers from the backend
+    response = requests.get(f"{BACKEND_URL}/api/v1/sensors")
+    response.raise_for_status()
+    sensors = response.json().get("sensors", [])
+    sensor_id = [sensor["id"] for sensor in sensors]
 
 
+# Overwriting the sensor IDs with custom names for display purposes!!!
+
+
+#Getting the list of assigned zones...
+    response = requests.get(f"{BACKEND_URL}/api/v1/zones")
+    response.raise_for_status()
+    zones = response.json().get("zones", [])
+
+    area_names = {
+        area["id"]: area["name"]
+        for zone in zones
+        for area in zone.get("areas", [])
+    }
+    zone_names = {
+        zone["id"]: zone["name"]
+        for zone in zones
+    }
+
+#Getting the latest temperature, humidity, and battery data for each sensor
+
+# Creating four empty dictionaries  using the sensor ID as a key
+    temp_id = {}
+    humidity_id = {}
+    battery_id = {}
+    timestamp = {}
+
+
+    # Loops through every sensor ID
+    for sensor_name in sensor_id:
+        sensor_response = requests.get(f"{BACKEND_URL}/api/v1/sensor_data/{sensor_name}")
+        sensor_response.raise_for_status()
+        sensor_data = sensor_response.json().get("sensor_data", [])
+        latest = sensor_data[-1] if sensor_data else {}
+        values = latest.get("values", [])
+
+        latest_timestamp = latest.get("timestamp")
+        #Converting timestamp into something more readable
+        timestamp[sensor_name] = (
+            pd.to_datetime(latest_timestamp).strftime("%Y-%m-%d %I:%M %p")
+            if latest_timestamp
+            else "N/A"
+        )
+
+        for value in values:
+            value_type = value.get("type")
+            value_data = value.get("value")
+
+            if value_type == "temperature":
+                temp_id[sensor_name] = value_data
+            elif value_type == "humidity":
+                humidity_id[sensor_name] = value_data
+            elif value_type == "battery":
+                battery_id[sensor_name] = value_data
+
+
+# Dynmaically adding expanders for each sensors added!
+# Displaying zone details for the first three sensors
+    for index, sensor_name in enumerate(sensor_id): # This class functions like an iterator...starting num is 0 and increases index!
+        sensor = next(sensor for sensor in sensors if sensor["id"] == sensor_name)
+        area_name = area_names.get(sensor.get("area_id"), "Unassigned")
+
+        with st.expander(f"Sensor {index + 1}"): # makes new expanders!
+            st.write(f"Sensor Name: {sensor_name} ")
+            st.write(f"Zone: {zone_names.get(sensor.get('zone_id'), 'Unassigned')}")
+            st.write(f"Area: {area_names.get(sensor.get('area_id'), 'Unassigned')}")
+            st.write(f"Latest Temperature: {temp_id.get(sensor_name, 'N/A')}")
+            st.write(f"Latest Humidity: {humidity_id.get(sensor_name, 'N/A')}")
+            st.write(f"Battery Percentage: {battery_id.get(sensor_name, 'N/A')}")
+            st.write(f"Last Reported Timestamp: {timestamp.get(sensor_name, 'N/A')}")
+
+
+# Getting readings for the cards
+def get_latest_reading(sensor_id):
+    try:
+        response = api_get(f"/api/v1/sensor_data/{sensor_id}/latest")
+        reading = response.get("sensor_data", {})
+        values = { item.get("type"): item.get("value") for item in reading.get("values", [])}
+
+        return { "temperature": values.get("temperature"), "humidity": values.get("humidity"), }
+
+    except requests.RequestException:
+        return None
+    except (ValueError, TypeError, AttributeError):
+        return None
+
+# For getting limits on temp and humidity 
+def get_environment_status(zone, sensor, reading):
+    if sensor is None or reading is None:
+        return "No data"
+
+    area = next(
+        (
+            area for area in zone.get("areas", [])
+            if str(area.get("id")) == str(sensor.get("area_id"))
+        ),
+        None
+    )
+    if area is None:
+        return "Limits not configured"
+    
+    conditions = area.get("target_conditions", {})
+    alerts = []
+
+    for measurement in ("temperature", "humidity"):
+        value = reading.get(measurement)
+        limits = conditions.get(measurement, {})
+
+        if value is None:
+            continue
+
+        minimum = limits.get("min")
+        maximum = limits.get("max")
+
+        if minimum is not None and value < minimum:
+            alerts.append(f"{measurement.title()} low")
+        if maximum is not None and value > maximum:
+            alerts.append(f"{measurement.title()} high")
+
+    return ", ".join(alerts) if alerts else "Normal"
+
+
+
+def display_zone_cards(zones, sensors):
+    st.subheader("Greenhouse Zones")
+
+    if not zones:
+        st.info("No greenhouse zones available.")
+        return
+
+    if "selected_zone" not in st.session_state:
+        st.session_state.selected_zone = None
+
+    columns_per_row = 3
+    for row_start in range(0, len(zones), columns_per_row):
+        columns = st.columns(columns_per_row)
+
+        for col, zone in zip( columns, zones[row_start:row_start + columns_per_row]):
+            zone_id = str(zone["id"])
+            # Find the sensor assigned to this zone
+            sensor = next(
+                (
+                    s for s in sensors
+                    if str(s.get("zone_id")) == zone_id
+                ),
+                None
+            )
+            # Retrieve latest readings
+            reading = (
+                get_latest_reading(sensor["id"])
+                if sensor else None
+            )
+            temperature = (
+                reading.get("temperature")
+                if reading else None
+            )
+            humidity = (
+                reading.get("humidity")
+                if reading else None
+            )
+            status = get_environment_status(
+                zone, sensor, reading
+            )
+            with col:
+                with st.container(border=True):
+                    st.markdown(f"### {zone['name']}")
+
+                    st.metric(
+                        "Temperature",
+                        f"{temperature}°"
+                        if temperature is not None else "No data"
+                    )
+                    st.metric(
+                        "Humidity",
+                        f"{humidity}%"
+                        if humidity is not None else "No data"
+                    )
+                    if status == "Normal":
+                        st.success(status)
+                    elif status == "No data":
+                        st.info(status)
+                    elif status == "Limits not configured":
+                        st.info(status)
+                    else:
+                        st.warning(status)
+
+                    if st.button(
+                        "View zone",
+                        key=f"zone_{zone_id}",
+                        use_container_width=True
+                    ):
+                        st.session_state.selected_zone = zone_id
+                        st.session_state.pending_zone_sensor = True
+                        st.rerun()
+                        
 update_dashboard()
