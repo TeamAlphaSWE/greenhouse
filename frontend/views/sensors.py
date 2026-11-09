@@ -191,9 +191,8 @@ if len(date_range) == 2:
     data = data[(data["Date"].dt.date >= start) & (data["Date"].dt.date <= end)]
 
 st.subheader("Temperature (°C)")
-st.altair_chart(time_series_chart(data, ["temperature"]), width="stretch")
-
+st.altair_chart(time_series_chart(data, ["temperature"]), use_container_width=True)
 st.subheader("Humidity (%)")
-st.altair_chart(time_series_chart(data, ["humidity"]), width="stretch")
+st.altair_chart(time_series_chart(data, ["humidity"]), use_container_width=True)
 st.subheader("Battery (%)")
 st.line_chart(data, x="Date", y="battery")

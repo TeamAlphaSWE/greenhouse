@@ -151,7 +151,7 @@ def update_dashboard():
             return
         st.altair_chart(time_series_chart(filtered, ["Temperature", "Humidity"],
                                           colors=["#28734f", "#91b44c"], height=360),
-                        width="stretch")
+                        use_container_width=True)
         st.caption(f"{len(filtered):,} readings · "
                    f"{filtered['Date'].min():%Y-%m-%d %H:%M} — "
                    f"{filtered['Date'].max():%Y-%m-%d %H:%M} UTC")
