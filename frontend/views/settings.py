@@ -1,4 +1,7 @@
 import streamlit as st
+
+from units import CELSIUS, FAHRENHEIT, temperature_unit
+
 st.title("Settings")
 
 
@@ -17,23 +20,27 @@ st.divider()
 
 st.subheader("Temperature")
 
-temperature_unit = st.radio(
+unit_options = [CELSIUS, FAHRENHEIT]
+selected_unit = st.radio(
     "Temperature Unit",
-    ["°C", "°F"],
+    unit_options,
+    index=unit_options.index(temperature_unit()),
     horizontal=True
 )
+# Saved in the session so every page shows temperatures in this unit.
+st.session_state["temperature_unit"] = selected_unit
 
 col1, col2 = st.columns(2)
 
 with col1:
     st.number_input(
-        f"Minimum Temperature ({temperature_unit})",
+        f"Minimum Temperature ({selected_unit})",
         value=18.0
     )
 
 with col2:
     st.number_input(
-        f"Maximum Temperature ({temperature_unit})",
+        f"Maximum Temperature ({selected_unit})",
         value=28.0
     )
 

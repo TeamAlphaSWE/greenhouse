@@ -10,12 +10,19 @@ from sensor_api import (
     get_zones,
     readings_to_frame,
 )
+from units import temperature_unit, to_display
 
 st.title("Sensors")
+
+unit = temperature_unit()
 
 
 def show(value, unit):
     return "—" if value is None or pd.isna(value) else f"{value:g}{unit}"
+
+
+def show_limit(celsius):
+    return "—" if celsius is None else f"{to_display(celsius, unit):g}"
 
 
 def show_activation_form(sensor_id, sensors):
@@ -41,7 +48,7 @@ def show_activation_form(sensor_id, sensors):
     if latest:
         values = {v["type"]: v["value"] for v in latest.get("values", [])}
         col1, col2, col3 = st.columns(3)
-        col1.metric("Temperature", f"{values['temperature']:g} °C" if "temperature" in values else "—")
+        col1.metric("Temperature", show(to_display(values.get("temperature"), unit), f" {unit}"))
         col2.metric("Humidity", f"{values['humidity']:g} %" if "humidity" in values else "—")
         col3.metric("Battery", f"{values['battery']:g} %" if "battery" in values else "—")
         reading_time = pd.to_datetime(latest.get("timestamp"), errors="coerce")
@@ -91,7 +98,7 @@ def show_activation_form(sensor_id, sensors):
     temp = conditions.get("temperature", {})
     humidity = conditions.get("humidity", {})
     st.caption(
-        f"Target · Temperature: {temp.get('min', '—')}–{temp.get('max', '—')} °C · "
+        f"Target · Temperature: {show_limit(temp.get('min'))}–{show_limit(temp.get('max'))} {unit} · "
         f"Humidity: {humidity.get('min', '—')}–{humidity.get('max', '—')} %"
     )
 
@@ -163,7 +170,7 @@ st.subheader("Sensor details")
 latest = data.iloc[-1] if not data.empty else None
 
 col1, col2, col3 = st.columns(3)
-col1.metric("Temperature", show(None if latest is None else latest["temperature"], " °C"))
+col1.metric("Temperature", show(None if latest is None else to_display(latest["temperature"], unit), f" {unit}"))
 col2.metric("Humidity", show(None if latest is None else latest["humidity"], " %"))
 col3.metric("Battery", show(None if latest is None else latest["battery"], " %"))
 
@@ -190,8 +197,13 @@ if len(date_range) == 2:
     start, end = date_range
     data = data[(data["Date"].dt.date >= start) & (data["Date"].dt.date <= end)]
 
-st.subheader("Temperature (°C)")
+data = data.assign(temperature=to_display(data["temperature"], unit))
+
+st.subheader(f"Temperature ({unit})")
 st.altair_chart(time_series_chart(data, ["temperature"]), use_container_width=True)
+
+st.subheader("Humidity (%)")
+st.altair_chart(time_series_chart(data, ["humidity"]), use_container_width=True)
 st.subheader("Humidity (%)")
 st.altair_chart(time_series_chart(data, ["humidity"]), use_container_width=True)
 st.subheader("Battery (%)")
