@@ -6,9 +6,9 @@ from sensor_api import readings_to_frame
 def test_readings_to_frame_one_column_per_type_sorted_by_date():
     readings = [
         {"timestamp": "2026-10-26T12:05:00+00:00",
-         "values": [{"type": "temperature", "value": 24.0}, {"type": "battery", "value": 80}]},
+        "values": [{"type": "temperature", "value": 24.0}, {"type": "battery", "value": 80}]},
         {"timestamp": "2026-10-26T12:00:00+00:00",
-         "values": [{"type": "temperature", "value": 23.4}, {"type": "humidity", "value": 50}]},
+        "values": [{"type": "temperature", "value": 23.4}, {"type": "humidity", "value": 50}]},
     ]
 
     frame = readings_to_frame(readings)
@@ -25,3 +25,16 @@ def test_readings_to_frame_empty():
 
     assert frame.empty
     assert list(frame.columns) == ["Date", "temperature", "humidity", "battery"]
+    
+def test_readings_to_frame_mixed_timestamp_formats():
+    readings = [
+        {"timestamp": "2026-11-05T14:05:00.123000+00:00",
+         "values": [{"type": "temperature", "value": 23.4}]},
+        {"timestamp": "2026-11-05T14:06:00+00:00",
+         "values": [{"type": "temperature", "value": 23.6}]},
+    ]
+
+    frame = readings_to_frame(readings)
+
+    assert frame["Date"].notna().all()
+    assert list(frame["temperature"]) == [23.4, 23.6]

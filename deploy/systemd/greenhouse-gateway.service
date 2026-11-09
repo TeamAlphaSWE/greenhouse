@@ -1,0 +1,16 @@
+[Unit]
+Description=Greenhouse gateway
+
+Wants=greenhouse-broker.service
+After=greenhouse-broker.service
+
+[Service]
+WorkingDirectory=%h/app/greenhouse_gateway
+EnvironmentFile=-%h/app/greenhouse_gateway/.env
+Environment=PYTHONUNBUFFERED=1
+ExecStart=/usr/bin/python3 subscriber.py
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=default.target
