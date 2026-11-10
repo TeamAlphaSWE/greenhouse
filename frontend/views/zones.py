@@ -3,7 +3,6 @@ import requests
 import streamlit as st
 from sensor_api import get_sensors, get_zones, get_sensor_data, readings_to_frame
 
-# NOT FINISHED YET #
 st.title("Zones")
 st.write("------------------------------------------")
 # will have all the zone information,the box in figma called as "monitoring positions"
