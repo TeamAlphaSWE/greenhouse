@@ -47,6 +47,7 @@ def update_dashboard():
             latest = data.iloc[-1] if not data.empty else None
             break
             break
+            break
     if latest is None:
         st.write("Data for zone unavailable.")
         return
