@@ -1,41 +1,80 @@
+"""One sensor-history chart with shared temperature/humidity axis (issue #162)."""
+from datetime import datetime, time, timedelta, timezone
+import os
+
+import pandas as pd
+import requests
 import streamlit as st
-import pandas as pd    # for data manipulation and analysis
-import numpy as np     # for numerical operations
-import requests        # for making HTTP requests to the Flask local server
+
+from charts import time_series_chart
+from units import temperature_unit, to_display
+
+BACKEND_URL = os.environ.get("BACKEND_URL", "https://greenhouse.kentcs.org").rstrip("/")
+RANGES = {"24 hours": 1, "7 days": 7, "30 days": 30}
 
 
-
-# Pandas and Numpy are a packaged deal since Pandas relies on Numpy for numerical operations!!
-# let work on a dashboard!
-
-# -------------------- Multi Selection for Different Zones -------------------
-
-
-
-# This is a home page.Will have one line graph with temp and humidity in the middle 
-# Buttons that will change the graph based on what zone the user wants to see.
-
-
-
-st.title("Greenhouse Dashboard")
-st.write("-----------------------------------------------")
-
-#-------------------- Handling Real-Time Update Functionality --------------------
-
-BACKEND_URL = "https://greenhouse.kentcs.org"
+def history_frame(readings, sensor_id):
+    """Normalize dates to UTC and reject any explicitly mismatched sensor IDs."""
+    rows = []
+    for reading in readings:
+        if str(reading.get("sensor_id", sensor_id)) != str(sensor_id):
+            continue
+        values = {v.get("type"): v.get("value") for v in reading.get("values", [])}
+        rows.append({"Date": reading.get("timestamp"),"Temperature": values.get("temperature"),"Humidity": values.get("humidity")})
+    frame = pd.DataFrame(rows, columns=["Date", "Temperature", "Humidity"])
+    frame["Date"] = pd.to_datetime(frame["Date"], utc=True, errors="coerce", format="ISO8601")
+    for column in ["Temperature", "Humidity"]:
+        frame[column] = pd.to_numeric(frame[column], errors="coerce")
+    return (frame.dropna(subset=["Date"])
+            .dropna(subset=["Temperature", "Humidity"], how="all")
+            .sort_values("Date").reset_index(drop=True))
 
 
-@st.fragment(run_every = "10s")     #refresh the dashboard every 10 seconds
+def filter_history(frame, start=None, end=None):
+    """Use [start, end) so a custom end date includes its entire UTC day."""
+    mask = pd.Series(True, index=frame.index)
+    if start is not None:
+        mask &= frame["Date"] >= start
+    if end is not None:
+        mask &= frame["Date"] < end
+    return frame.loc[mask].copy()
+
+
+st.markdown("""
+<style>
+.gh-dashboard-hero { background:#123d2d; color:#fffdf4; padding:28px 30px;
+ border-radius:20px; margin-bottom:24px; }
+.gh-dashboard-hero p { color:#c7e5aa; font-size:12px; letter-spacing:2px;
+ text-transform:uppercase; margin:0 0 10px; }
+.gh-dashboard-hero h1 { color:#fffdf4; font-size:clamp(28px,5vw,42px);
+ margin:0; padding:0; line-height:1.2; }
+.st-key-sensor_trends { border:1px solid #dce4d6; border-radius:18px; padding:20px; }
+@media(max-width:540px) {
+ .gh-dashboard-hero { padding:22px 18px; }
+ .st-key-sensor_trends { padding:12px; }
+}
+</style>
+<header class="gh-dashboard-hero"><p>Greenhouse Project / Dashboard</p>
+<h1>A clearer view of your greenhouse.</h1></header>
+""", unsafe_allow_html=True)
+
+
+def api_get(path):
+    response = requests.get(f"{BACKEND_URL}{path}", timeout=10)
+    response.raise_for_status()
+    return response.json()
+
+
+@st.fragment(run_every="10s")
 def update_dashboard():
-
-    sensors_response = requests.get(f"{BACKEND_URL}/api/v1/sensors")
-    sensors_response.raise_for_status()
-    sensors = sensors_response.json().get("sensors", [])
-
-    if not sensors:
-        st.write("No sensors available.")
+    try:
+        sensors = api_get("/api/v1/sensors").get("sensors", [])
+    except (requests.RequestException, ValueError):
+        st.error("Unable to load sensors. Check the backend connection and try again.")
         return
-
+    if not sensors:
+        st.info("No sensors available.")
+        return    
     pending_count = sum(1 for s in sensors if s.get("status") == "pending")
     if pending_count:
         noun = "sensor is" if pending_count == 1 else "sensors are"
@@ -65,81 +104,285 @@ def update_dashboard():
                 with st.container(horizontal=True, horizontal_alignment="right"):
                     st.page_link("views/sensors.py", label="Review")
 
-    sensor_options = {s["id"]: s.get("name") or s["hardware_id"] for s in sensors}
+    sensor_options = {s["id"]: s.get("name") or s.get("hardware_id") or s["id"]
+                      for s in sensors}
 
-    selected_id = st.segmented_control(
-        "Select a sensor",
-        options = list(sensor_options.keys()),
-        format_func = lambda sensor_id: sensor_options[sensor_id],
-        selection_mode = "single",
-        default = next(iter(sensor_options)),
-    )
+    # Change the dropdown if a card has been pressed
+    if st.session_state.pop("pending_zone_sensor", False):
+        selected_zone = st.session_state.get("selected_zone")
+        if selected_zone:
+            zone_sensor = next(
+                (
+                    s for s in sensors
+                    if str(s.get("zone_id")) == str(selected_zone)
+                ),
+                None
+            )
+            if zone_sensor and zone_sensor["id"] in sensor_options:
+                st.session_state["trend_sensor"] = zone_sensor["id"]
 
-    if selected_id is None:
-        st.write("Select a sensor to view its data.")
-        return
+    # Clear a removed sensor selection before creating its widget.
+    if st.session_state.get("trend_sensor") not in sensor_options:
+        st.session_state.pop("trend_sensor", None)
+    selected_id = st.selectbox("Select a sensor", list(sensor_options),
+                               format_func=sensor_options.get, key="trend_sensor")
 
-    response_sensor_data = requests.get(f"{BACKEND_URL}/api/v1/sensor_data/{selected_id}")
-    response_sensor_data.raise_for_status()
-    sensor_data = response_sensor_data.json()
-    record = sensor_data.get("sensor_data", [])      # Getting the all the records of sensor data from the response
-    chart_rows = []                                  # To store the previous data points for the chart
+    with st.container(key="sensor_trends"):
+        st.subheader("Temperature & Humidity Over Time")
+        period = st.selectbox("Time range", [*RANGES, "All history", "Custom"],
+                              index=1, key="trend_range")
+        now = datetime.now(timezone.utc)
+        start = end = None
+        if period in RANGES:
+            start, end = now - timedelta(days=RANGES[period]), now
+        elif period == "Custom":
+            selected_dates = st.date_input(
+                "Start and end dates (UTC)",
+                value=(now.date() - timedelta(days=7), now.date()),
+                key="trend_dates", format="YYYY-MM-DD")
+            if not isinstance(selected_dates, (tuple, list)) or len(selected_dates) != 2:
+                st.info("Select both a start date and an end date.")
+                return
+            first, last = selected_dates
+            if first > last:
+                st.error("The end date must be on or after the start date.")
+                return
+            start = datetime.combine(first, time.min, tzinfo=timezone.utc)
+            end = datetime.combine(last + timedelta(days=1), time.min, tzinfo=timezone.utc)
 
-    # Storing the data into a dict for easier access and manipulation
-    for records in record:
-        dictionary = {}
-        timestamp = records.get("timestamp")  # getting the timestamp inside the for loop
+        try:
+            readings = api_get(f"/api/v1/sensor_data/{selected_id}").get("sensor_data", [])
+        except (requests.RequestException, ValueError):
+            st.error("Unable to load this sensor's readings. Please try again.")
+            return
+        frame = history_frame(readings, selected_id)
+        filtered = filter_history(frame, start, end)
+        unit = temperature_unit()
+        filtered["Temperature"] = to_display(filtered["Temperature"], unit)
+        st.caption(f"Sensor: {sensor_options[selected_id]} · All times UTC · "
+                   f"Temperature and humidity share one Y-axis. Temperature in {unit}, humidity in %.")
+        if start is not None:
+            label_end = end - timedelta(microseconds=1) if period == "Custom" else end
+            st.caption(f"Selected window: {start:%Y-%m-%d %H:%M} — {label_end:%Y-%m-%d %H:%M} UTC")
+        if filtered.empty:
+            st.info("No sensor data available for this range. Try All history or different dates.")
+            return
+        st.altair_chart(time_series_chart(filtered, ["Temperature", "Humidity"],
+                                          colors=["#28734f", "#91b44c"], height=360),
+                        use_container_width=True)
+        st.caption(f"{len(filtered):,} readings · "
+                   f"{filtered['Date'].min():%Y-%m-%d %H:%M} — "
+                   f"{filtered['Date'].max():%Y-%m-%d %H:%M} UTC")
+        try: # Getting the cards out under the chart
+            zones = api_get("/api/v1/zones").get("zones", [])
+        except (requests.RequestException, ValueError):
+            st.error("Unable to load greenhouse zones.")
+            return
 
-        for id in records.get("values", []):
-            dictionary[id["type"]] = id["value"] # for the id var in dictionary, store the value based on the word type defined in the sensor_data response
+        display_zone_cards(zones, sensors)
 
-        temperature_data = dictionary.get("temperature")  # Getting the values of the response for temperature
-        humidity_data = dictionary.get("humidity")        # Gettting the value for the response for humidity
+ # Customization for sensor display cards and expandable sections
+    st.subheader("Sensor Display")
 
-        # Making a row for the chart data to visualize and connect points after updating
+ #Getting hardware ids / sensor identifiers from the backend
+    response = requests.get(f"{BACKEND_URL}/api/v1/sensors")
+    response.raise_for_status()
+    sensors = response.json().get("sensors", [])
+    sensor_id = [sensor["id"] for sensor in sensors]
 
-        chart_rows.append({
-            "Temperature": temperature_data,
-            "Humidity": humidity_data,
-            "Date": timestamp
-        })
 
-    chart_data = pd.DataFrame(chart_rows) #converting rows in Dataframe to manipulate
+# Overwriting the sensor IDs with custom names for display purposes!!!
 
-    if chart_data.empty:
-        st.write("No sensor data available.")
-        return
 
-    chart_data["Date"] = pd.to_datetime(chart_data["Date"])# turning the JSON timestamp into a datetime object
-    chart_data = chart_data.sort_values(by="Date")         # Sorting the chart data by Time for proper visualization
+#Getting the list of assigned zones...
+    response = requests.get(f"{BACKEND_URL}/api/v1/zones")
+    response.raise_for_status()
+    zones = response.json().get("zones", [])
 
-#-------------- Line chart Displaying Temperature & Humidity for the selected sensor -------------------
+    area_names = {
+        area["id"]: area["name"]
+        for zone in zones
+        for area in zone.get("areas", [])
+    }
+    zone_names = {
+        zone["id"]: zone["name"]
+        for zone in zones
+    }
 
-    st.subheader("Temperature & Humidity Over Time")
-    st.line_chart(chart_data, x="Date", y=["Temperature", "Humidity"])
+#Getting the latest temperature, humidity, and battery data for each sensor
 
-#-------------- Line chart Displaying Historical Data for specific sensor -------------------
+# Creating four empty dictionaries  using the sensor ID as a key
+    temp_id = {}
+    humidity_id = {}
+    battery_id = {}
+    timestamp = {}
 
-    st.subheader("Historical Sensor Data")
-    oldest_date = chart_data["Date"].min().date() # min is the oldest date data was collected
-    recent_date = chart_data["Date"].max().date() # max is the most recent date data was collected
-    timerange_id = st.date_input(
-        "Enter time range to filter data",
-        value = (oldest_date, recent_date),
-        min_value = oldest_date,
-        max_value = recent_date
+
+    # Loops through every sensor ID
+    for sensor_name in sensor_id:
+        sensor_response = requests.get(f"{BACKEND_URL}/api/v1/sensor_data/{sensor_name}")
+        sensor_response.raise_for_status()
+        sensor_data = sensor_response.json().get("sensor_data", [])
+        latest = sensor_data[-1] if sensor_data else {}
+        values = latest.get("values", [])
+
+        latest_timestamp = latest.get("timestamp")
+        #Converting timestamp into something more readable
+        timestamp[sensor_name] = (
+            pd.to_datetime(latest_timestamp).strftime("%Y-%m-%d %I:%M %p")
+            if latest_timestamp
+            else "N/A"
         )
 
-    if len(timerange_id) == 2:
-        start_date, end_date = timerange_id
-        range_filter = chart_data[
-            (chart_data["Date"].dt.date >= start_date) &
-            (chart_data["Date"].dt.date <= end_date)
-        ]
+        for value in values:
+            value_type = value.get("type")
+            value_data = value.get("value")
 
-        if range_filter.empty:
-            st.write("No sensor data available for this range.")
-        else:
-            st.line_chart(range_filter, x="Date", y=["Temperature", "Humidity"]) # this can collect the week's data and graph it
+            if value_type == "temperature":
+                temp_id[sensor_name] = value_data
+            elif value_type == "humidity":
+                humidity_id[sensor_name] = value_data
+            elif value_type == "battery":
+                battery_id[sensor_name] = value_data
 
+
+# Dynmaically adding expanders for each sensors added!
+# Displaying zone details for the first three sensors
+    for index, sensor_name in enumerate(sensor_id): # This class functions like an iterator...starting num is 0 and increases index!
+        sensor = next(sensor for sensor in sensors if sensor["id"] == sensor_name)
+        area_name = area_names.get(sensor.get("area_id"), "Unassigned")
+
+        with st.expander(f"Sensor {index + 1}"): # makes new expanders!
+            st.write(f"Sensor Name: {sensor_name} ")
+            st.write(f"Zone: {zone_names.get(sensor.get('zone_id'), 'Unassigned')}")
+            st.write(f"Area: {area_names.get(sensor.get('area_id'), 'Unassigned')}")
+            st.write(f"Latest Temperature: {temp_id.get(sensor_name, 'N/A')}")
+            st.write(f"Latest Humidity: {humidity_id.get(sensor_name, 'N/A')}")
+            st.write(f"Battery Percentage: {battery_id.get(sensor_name, 'N/A')}")
+            st.write(f"Last Reported Timestamp: {timestamp.get(sensor_name, 'N/A')}")
+
+
+# Getting readings for the cards
+def get_latest_reading(sensor_id):
+    try:
+        response = api_get(f"/api/v1/sensor_data/{sensor_id}/latest")
+        reading = response.get("sensor_data", {})
+        values = { item.get("type"): item.get("value") for item in reading.get("values", [])}
+
+        return { "temperature": values.get("temperature"), "humidity": values.get("humidity"), }
+
+    except requests.RequestException:
+        return None
+    except (ValueError, TypeError, AttributeError):
+        return None
+
+# For getting limits on temp and humidity 
+def get_environment_status(zone, sensor, reading):
+    if sensor is None or reading is None:
+        return "No data"
+
+    area = next(
+        (
+            area for area in zone.get("areas", [])
+            if str(area.get("id")) == str(sensor.get("area_id"))
+        ),
+        None
+    )
+    if area is None:
+        return "Limits not configured"
+    
+    conditions = area.get("target_conditions", {})
+    alerts = []
+
+    for measurement in ("temperature", "humidity"):
+        value = reading.get(measurement)
+        limits = conditions.get(measurement, {})
+
+        if value is None:
+            continue
+
+        minimum = limits.get("min")
+        maximum = limits.get("max")
+
+        if minimum is not None and value < minimum:
+            alerts.append(f"{measurement.title()} low")
+        if maximum is not None and value > maximum:
+            alerts.append(f"{measurement.title()} high")
+
+    return ", ".join(alerts) if alerts else "Normal"
+
+
+
+def display_zone_cards(zones, sensors):
+    st.subheader("Greenhouse Zones")
+
+    if not zones:
+        st.info("No greenhouse zones available.")
+        return
+
+    if "selected_zone" not in st.session_state:
+        st.session_state.selected_zone = None
+
+    columns_per_row = 3
+    for row_start in range(0, len(zones), columns_per_row):
+        columns = st.columns(columns_per_row)
+
+        for col, zone in zip( columns, zones[row_start:row_start + columns_per_row]):
+            zone_id = str(zone["id"])
+            # Find the sensor assigned to this zone
+            sensor = next(
+                (
+                    s for s in sensors
+                    if str(s.get("zone_id")) == zone_id
+                ),
+                None
+            )
+            # Retrieve latest readings
+            reading = (
+                get_latest_reading(sensor["id"])
+                if sensor else None
+            )
+            temperature = (
+                reading.get("temperature")
+                if reading else None
+            )
+            humidity = (
+                reading.get("humidity")
+                if reading else None
+            )
+            status = get_environment_status(
+                zone, sensor, reading
+            )
+            with col:
+                with st.container(border=True):
+                    st.markdown(f"### {zone['name']}")
+
+                    st.metric(
+                        "Temperature",
+                        f"{temperature}°"
+                        if temperature is not None else "No data"
+                    )
+                    st.metric(
+                        "Humidity",
+                        f"{humidity}%"
+                        if humidity is not None else "No data"
+                    )
+                    if status == "Normal":
+                        st.success(status)
+                    elif status == "No data":
+                        st.info(status)
+                    elif status == "Limits not configured":
+                        st.info(status)
+                    else:
+                        st.warning(status)
+
+                    if st.button(
+                        "View zone",
+                        key=f"zone_{zone_id}",
+                        use_container_width=True
+                    ):
+                        st.session_state.selected_zone = zone_id
+                        st.session_state.pending_zone_sensor = True
+                        st.rerun()
+                        
 update_dashboard()

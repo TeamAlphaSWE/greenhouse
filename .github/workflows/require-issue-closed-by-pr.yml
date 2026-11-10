@@ -1,0 +1,33 @@
+name: Require Issue Closed By PR
+
+on:
+  issues:
+    types: [closed]
+
+permissions:
+  issues: write
+
+jobs:
+  verify-closed-by-pr:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check whether a merged PR actually closed this issue
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          count=$(gh api graphql -f query='
+            query($owner:String!, $repo:String!, $issue:Int!) {
+              repository(owner:$owner, name:$repo) {
+                issue(number:$issue) {
+                  closedByPullRequestsReferences(first: 1) { totalCount }
+                }
+              }
+            }' -f owner="${{ github.repository_owner }}" -f repo="${{ github.event.repository.name }}" \
+            -F issue=${{ github.event.issue.number }} \
+            --jq '.data.repository.issue.closedByPullRequestsReferences.totalCount')
+
+          if [ "$count" -eq 0 ]; then
+            gh issue reopen ${{ github.event.issue.number }}
+            gh issue comment ${{ github.event.issue.number }} \
+              --body "Reopened: closed without a merged PR. This issue should stay open until the work that closes it is merged."
+          fi
