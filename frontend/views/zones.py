@@ -1,12 +1,8 @@
 import pandas as pd
-import requests
 import streamlit as st
 from sensor_api import get_sensors, get_zones, get_sensor_data, readings_to_frame
+from units import temperature_unit, to_display
 
-st.title("Zones")
-st.write("------------------------------------------")
-# will have all the zone information,the box in figma called as "monitoring positions"
-BACKEND_URL = "https://greenhouse.kentcs.org"
 @st.fragment(run_every = "10s") # refresh page once every 10 seconds
 def update_dashboard():
     def show(value, unit):
@@ -49,12 +45,14 @@ def update_dashboard():
         if s.get("zone_id") == zone.get("id"): 
             data = readings_to_frame(get_sensor_data(s.get("id")))
             latest = data.iloc[-1] if not data.empty else None
+            break
     if latest is None:
         st.write("Data for zone unavailable.")
         return
     else:
         # create columns that tell temp and humidity that sensor is getting for specific zone
         col1, col2, col3 = st.columns(3)
-        col1.metric("**Temperature:**", show(None if latest is None else latest["temperature"], " °C"))
-        col2.metric("**Humidity:**", show(None if latest is None else latest["humidity"], " %"))
+        unit = temperature_unit()
+        col1.metric("Temperature", show(to_display(None if latest is None else latest["temperature"], unit), unit))
+        col2.metric("Humidity", show(None if latest is None else latest["humidity"], " %"))
 update_dashboard()
