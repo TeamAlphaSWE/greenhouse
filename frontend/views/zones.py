@@ -46,6 +46,7 @@ def update_dashboard():
             data = readings_to_frame(get_sensor_data(s.get("id")))
             latest = data.iloc[-1] if not data.empty else None
             break
+            break
     if latest is None:
         st.write("Data for zone unavailable.")
         return
