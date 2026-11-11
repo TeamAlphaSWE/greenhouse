@@ -1,0 +1,48 @@
+name: Update Sprint Project README
+
+on:
+  schedule:
+    - cron: "15 12 * * *"   # daily, off the hour
+  workflow_dispatch: {}
+
+jobs:
+  update-readme:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Fetch current sprint data and existing README
+        env:
+          GH_TOKEN: ${{ secrets.PROJECTS_TOKEN }}
+        run: |
+          gh api graphql -f query='
+            query {
+              organization(login: "TeamAlphaSWE") {
+                projectV2(number: 3) {
+                  id
+                  readme
+                  field(name: "Sprint") {
+                    ... on ProjectV2IterationField {
+                      configuration {
+                        iterations { title startDate duration }
+                      }
+                    }
+                  }
+                }
+              }
+            }' > project_data.json
+
+      - name: Compute new README content
+        run: python3 .github/scripts/update_sprint_readme.py project_data.json > new_readme.md
+
+      - name: Push updated README to the project
+        env:
+          GH_TOKEN: ${{ secrets.PROJECTS_TOKEN }}
+        run: |
+          project_id=$(jq -r '.data.organization.projectV2.id' project_data.json)
+          gh api graphql -f query='
+            mutation($projectId: ID!, $readme: String!) {
+              updateProjectV2(input: { projectId: $projectId, readme: $readme }) {
+                projectV2 { id }
+              }
+            }' -f projectId="$project_id" -F readme=@new_readme.md
