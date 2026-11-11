@@ -14,6 +14,7 @@ def join_regions(regions, zones):
     """regions: a map's regions list. zones: GET /api/v1/zones shape."""
     region_lookup = {
         area["region_id"]: {
+            "area_id": area["id"],
             "area_name": area.get("name"),
             "zone_id": zone["id"],
             "zone_name": zone.get("name"),
@@ -22,7 +23,7 @@ def join_regions(regions, zones):
         for area in zone.get("areas", [])
         if area.get("region_id")
     }
-    empty = {"area_name": None, "zone_id": None, "zone_name": None}
+    empty = {"area_id": None, "area_name": None, "zone_id": None, "zone_name": None}
 
     return [
         {**region, **region_lookup.get(region.get("id"), empty)}

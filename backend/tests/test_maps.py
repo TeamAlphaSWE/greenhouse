@@ -93,6 +93,7 @@ def test_get_map_joins_area_and_zone_names(app, client):
     assert response.status_code == 200
     region = body["map"]["regions"][0]
     assert region["area_name"] == "Flower Bed"
+    assert region["area_id"] == str(area_id)
     assert region["zone_name"] == "Zone 1"
     assert region["id"] == str(region_id)
     assert isinstance(region["zone_id"], str)
