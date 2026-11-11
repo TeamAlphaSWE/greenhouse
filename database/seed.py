@@ -102,7 +102,7 @@ users_collection = {
 maps_collection = {
     "_id": map_id,
     "name": "Greenhouse Floor 1",
-    "image_path": "/maps/greenhouse-floor-1.png",
+    "image_path": "maps/greenhouse-floor-1.png",
     "regions": [
         {
             "id": region_id,
