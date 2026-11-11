@@ -1,6 +1,10 @@
 name: Update Sprint Project README
 
 on:
+  push:
+    paths:
+      - ".github/workflows/update-sprint-readme.yml"
+      - ".github/scripts/update_sprint_readme.py"
   schedule:
     - cron: "15 12 * * *"   # daily, off the hour
   workflow_dispatch: {}
