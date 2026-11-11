@@ -303,8 +303,10 @@ with right:
         label_visibility="collapsed"
     )
 
-    if st.button("Sign In →"):
+    username=username.lower()
 
+    if st.button("Sign In →"):
+                    
         if username == "admin" and password == "1234":
             st.session_state["logged_in"] = True
             st.session_state["username"] = username
