@@ -11,20 +11,13 @@ permissions:
 
 jobs:
   test:
+    uses: ./.github/workflows/backend-tests.yml
+
+  validate-deploy-files:
     runs-on: ubuntu-latest
     timeout-minutes: 15
-    strategy:
-      matrix:
-        python: ['3.10', '3.12']
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with:
-          python-version: ${{ matrix.python }}
-      - name: Install test dependencies
-        run: python -m pip install -r backend/requirements.txt
-      - name: Test backend
-        run: python -m pytest backend
       - name: Validate deployment files
         run: |
           bash -n deploy/deploy.sh
@@ -32,7 +25,7 @@ jobs:
           node --check frontend/http_transport.js
 
   deploy:
-    needs: test
+    needs: [test, validate-deploy-files]
     runs-on: ubuntu-latest
     timeout-minutes: 15
     concurrency:

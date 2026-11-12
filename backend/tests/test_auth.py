@@ -118,3 +118,105 @@ def test_require_auth_rejects_token_for_deleted_user(app, client):
     response = client.get("/__protected", headers={"Authorization": f"Bearer {token}"})
 
     assert response.status_code == 401
+
+
+def _auth_header(app, user):
+    with app.app_context():
+        return {"Authorization": f"Bearer {issue_token(app, user['id'])}"}
+
+
+def _stored_hash(app, user):
+    with app.app_context():
+        return get_collection("users").find_one({"_id": ObjectId(user["id"])})["password_hash"]
+
+
+def test_change_password_succeeds_and_new_password_logs_in(app, client):
+    user = seed_user(app, username="alice", password="correct-horse")
+
+    response = client.post(
+        "/api/v1/change-password",
+        json={"old_password": "correct-horse", "new_password": "battery-staple"},
+        headers=_auth_header(app, user),
+    )
+
+    assert response.status_code == 200
+    assert response.get_json() == {"message": "Password changed"}
+    assert _stored_hash(app, user).startswith("pbkdf2:sha256")
+
+    new_login = client.post("/api/v1/login", json={"username": "alice", "password": "battery-staple"})
+    old_login = client.post("/api/v1/login", json={"username": "alice", "password": "correct-horse"})
+    assert new_login.status_code == 200
+    assert old_login.status_code == 401
+
+
+def test_change_password_wrong_old_password_changes_nothing(app, client):
+    user = seed_user(app, username="alice", password="correct-horse")
+    hash_before = _stored_hash(app, user)
+
+    response = client.post(
+        "/api/v1/change-password",
+        json={"old_password": "wrong", "new_password": "battery-staple"},
+        headers=_auth_header(app, user),
+    )
+
+    assert response.status_code == 400
+    assert response.get_json() == {"error": "old_password is incorrect"}
+    assert _stored_hash(app, user) == hash_before
+    login = client.post("/api/v1/login", json={"username": "alice", "password": "correct-horse"})
+    assert login.status_code == 200
+
+
+def test_change_password_requires_auth(client):
+    response = client.post(
+        "/api/v1/change-password",
+        json={"old_password": "correct-horse", "new_password": "battery-staple"},
+    )
+
+    assert response.status_code == 401
+
+
+def test_change_password_invalid_json_returns_400(app, client):
+    user = seed_user(app)
+
+    response = client.post(
+        "/api/v1/change-password", data="not json", content_type="application/json",
+        headers=_auth_header(app, user),
+    )
+
+    assert response.status_code == 400
+    assert response.get_json() == {"error": "Invalid JSON"}
+
+
+@pytest.mark.parametrize("body", [
+    {"new_password": "battery-staple"},
+    {"old_password": "correct-horse"},
+    {"old_password": "correct-horse", "new_password": ""},
+    {"old_password": "correct-horse", "new_password": 123},
+])
+def test_change_password_validation_returns_400(app, client, body):
+    user = seed_user(app)
+    hash_before = _stored_hash(app, user)
+
+    response = client.post("/api/v1/change-password", json=body, headers=_auth_header(app, user))
+
+    assert response.status_code == 400
+    assert response.get_json() == {"error": "old_password and new_password are required"}
+    assert _stored_hash(app, user) == hash_before
+
+
+def test_change_password_database_error_returns_500(app, client, monkeypatch):
+    user = seed_user(app)
+
+    def fail(*args, **kwargs):
+        raise PyMongoError("database is down")
+
+    monkeypatch.setattr(users, "set_password_hash", fail)
+
+    response = client.post(
+        "/api/v1/change-password",
+        json={"old_password": "correct-horse", "new_password": "battery-staple"},
+        headers=_auth_header(app, user),
+    )
+
+    assert response.status_code == 500
+    assert response.get_json() == {"error": "Unexpected server error"}
