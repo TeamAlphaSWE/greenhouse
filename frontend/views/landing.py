@@ -157,10 +157,8 @@ div[class*="st-key-area-tile-"] button p strong { font-size:calc(.75rem + 10px);
  font-size:calc(1rem); font-style:normal; color:#000; }
 .st-key-area_detail [data-testid="stMarkdownContainer"] p {
  color:#18372a; margin:0; line-height:1.25; font-size:calc(1rem + 10px); }
-.st-key-area_detail .area-header {
- margin:0; }
-.st-key-area_detail .area-title-row {
- display:flex; align-items:center; gap:10px; }
+.st-key-area_detail .area-header { margin:0; }
+.st-key-area_detail .area-title-row { display:flex; align-items:center; gap:10px; }
 .st-key-area_detail .area-last-seen {
  color:#526352; font-size:.8rem; line-height:1.2; margin-top:3px; }
 .st-key-area_detail .area-header .area-name {
@@ -313,7 +311,11 @@ def update_dashboard():
                 temperature = to_display(selected_area["temperature"], unit)
                 low = to_display(selected_area["temperature_min"], unit)
                 high = to_display(selected_area["temperature_max"], unit)
-                range_text = f"{low:g}–{high:g}{unit}" if low is not None and high is not None else "Not configured"
+                range_text = (
+                    f"{low:g}–{high:g}{unit}"
+                    if low is not None and high is not None
+                    else "Not configured"
+                )
                 battery = None
                 last_seen_text = "No sensor reading yet"
                 sensor_id = area_to_sensor.get(selected_area_id)
@@ -359,7 +361,8 @@ def update_dashboard():
                     with detail_cols[1]:
                         st.caption("Temperature")
                         st.markdown(
-                            f"**{temperature:g}{unit}**" if temperature is not None else "**—**"
+                            f"**{temperature:g}{unit}**"
+                            if temperature is not None else "**—**"
                         )
                     with detail_cols[2]:
                         st.caption("Humidity")
