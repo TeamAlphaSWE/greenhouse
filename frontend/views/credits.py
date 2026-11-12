@@ -26,7 +26,7 @@ CSS = """
 .gh-credits * { box-sizing: border-box; }
 .gh-credits .hero { background: #123d2d; color: #fffdf4;
     padding: clamp(28px, 5vw, 58px); border-radius: 24px; }
-.gh-credits .eyebrow { color: #c7e5aa; font-size: 12px; font-weight: 700;
+.gh-credits .eyebrow { color: #d4af37; font-size: 12px; font-weight: 700;
     letter-spacing: 2px; text-transform: uppercase; margin: 0 0 20px; }
 .gh-credits h1 { color: #fffdf4; font-size: clamp(36px, 6vw, 62px);
     line-height: 1.1; letter-spacing: -2px; margin: 0 0 20px; padding: 0; }

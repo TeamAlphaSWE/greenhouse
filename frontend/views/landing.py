@@ -38,20 +38,143 @@ def filter_history(frame, start=None, end=None):
     if end is not None:
         mask &= frame["Date"] < end
     return frame.loc[mask].copy()
+#-------------------- KPI SUMMARY/ GREENHOUSE MAP PANEL ------------------------
+STATUS_DISPLAY = {
+    "normal": {"icon": "✓", "label": "In range", "dot": "#2e7d32", "badge": "green"},
+    "out_of_range": {"icon": "⚠", "label": "Alert", "dot": "#d32f2f", "badge": "gray"},
+    "offline_unknown": {"icon": "?", "label": "Offline/Unknown", "dot": "#808080", "badge": "gray"},
+}
 
+
+def area_kpis(summary):
+    """(total, within range, needs attention) from an /areas/overview summary."""
+    return (
+        summary.get("total", 0),
+        summary.get("normal", 0),
+        summary.get("out_of_range", 0) + summary.get("offline_unknown", 0),
+    )
+
+
+def chunk(items, size):
+    """Split a list into row-sized pieces for a column grid."""
+    return [items[i:i + size] for i in range(0, len(items), size)]
+#------------------------------
 
 st.markdown("""
 <style>
+html, body, .stApp, [data-testid="stAppViewContainer"], [data-testid="stMain"],
+[data-testid="stMainBlockContainer"] {
+ background:#f6f7ef !important;
+}
+[data-testid="stSidebar"], [data-testid="stSidebarNav"] {
+ background:#123d2d !important;
+}
+[data-testid="stSidebarNav"] * {
+ color:#fffdf4;
+}
 .gh-dashboard-hero { background:#123d2d; color:#fffdf4; padding:28px 30px;
  border-radius:20px; margin-bottom:24px; }
-.gh-dashboard-hero p { color:#c7e5aa; font-size:12px; letter-spacing:2px;
+.gh-dashboard-hero p { color:#d4af37; font-size:12px; font-weight:700; letter-spacing:2px;
  text-transform:uppercase; margin:0 0 10px; }
 .gh-dashboard-hero h1 { color:#fffdf4; font-size:clamp(28px,5vw,42px);
  margin:0; padding:0; line-height:1.2; }
-.st-key-sensor_trends { border:1px solid #dce4d6; border-radius:18px; padding:20px; }
+.st-key-sensor_trends {
+ background:#fff; border:1px solid #dce4d6; border-radius:18px; padding:20px;
+ color:#000;
+}
+.st-key-sensor_trends .st-key-trend_sensor button,
+.st-key-sensor_trends .st-key-trend_sensor button *,
+.st-key-sensor_trends .st-key-trend_range button,
+.st-key-sensor_trends .st-key-trend_range button * {
+ color:#fff !important;
+ -webkit-text-fill-color:#fff !important;
+}
+.st-key-sensor_trends h1, .st-key-sensor_trends h2, .st-key-sensor_trends h3,
+.st-key-sensor_trends p, .st-key-sensor_trends label,
+.st-key-sensor_trends [data-testid="stCaptionContainer"] {
+ color:#000 !important;
+}
+
+/* KPI Customization */
+.st-key-area_overview_card { background:#fffdf4; color:#18372a; border:1px solid #dce4d6; border-radius:20px; padding:26px 28px 22px;
+ margin-bottom:24px; }
+.st-key-area_overview_card h2, .st-key-area_overview_card h3, .st-key-area_overview_card h4,
+.st-key-area_overview_card p, .st-key-area_overview_card span, .st-key-area_overview_card label {
+ color:#18372a; }
+.st-key-area_overview_card small { color:#18372a; }
+.st-key-area_overview_card [data-testid="stMetric"] { text-align:left; padding:0; }
+.st-key-area_overview_card [data-testid="stMetricValue"] { color:#284a30; font-weight:700; }
+.st-key-area_overview_card [data-testid="stMetricLabel"] { color:#526352; }
+.st-key-area_kpi_in_range [data-testid="stMetricValue"],
+.st-key-area_kpi_in_range [data-testid="stMetricLabel"] { color:#2e7d32; }
+.area-kpi { display:flex; flex-direction:column; align-items:center; text-align:center; }
+.area-kpi-value { color:#284a30; font-size:calc(2rem + 4px); font-weight:700; line-height:1.2; }
+.area-kpi-label { color:#526352; font-size:.875rem; }
+.area-kpi--normal .area-kpi-value, .area-kpi--normal .area-kpi-label { color:#2e7d32; }
+.area-kpi--attention .area-kpi-value, .area-kpi--attention .area-kpi-label { color:#d32f2f; }
+.area-map-title {
+ color:#18372a; font-size:calc(1.75rem + 5px); font-weight:600;
+ text-align:left; margin:0;
+}
+.area-map-header {
+ display:flex; align-items:center; justify-content:space-between;
+ gap:16px; padding-top:5px; margin-bottom:14px;
+}
+.area-map-legend {
+ display:flex; align-items:center; justify-content:flex-end;
+ gap:14px; color:#18372a; white-space:nowrap;
+}
+.area-map-legend-item { display:flex; align-items:center; gap:5px; }
+@media(max-width:700px) {
+ .area-map-header { align-items:flex-start; flex-direction:column; }
+ .area-map-legend { justify-content:flex-start; flex-wrap:wrap; white-space:normal; }
+}
+.st-key-area_overview_card hr { border-color:#d5dfcd; }
+.st-key-area_map_panel { background:#f6f7ef; border:1px solid #dce4d6; border-radius:12px;
+ padding:18px 20px 14px; margin:4px 0 16px; }
+.st-key-area_map_panel h4, .st-key-area_map_panel p,
+.st-key-area_map_panel [data-testid="stCaptionContainer"] { color:#18372a; }
+.st-key-area_map_panel [data-testid="stCaptionContainer"] { text-align:center; }
+div[class*="st-key-area-tile-normal-"] button { background:#fff; border:2px solid #668675;
+ border-radius:7px; min-height:140px; height:140px; text-align:center; }
+div[class*="st-key-area-tile-out_of_range-"] button { background:#fffdf4; border:2px solid #d5dfcd;
+ border-radius:7px; min-height:140px; height:140px; text-align:center; }
+div[class*="st-key-area-tile-offline_unknown-"] button { background:#e7efdc; border:2px dashed #668675;
+ border-radius:7px; min-height:140px; height:140px; text-align:center; }
+div[class*="st-key-area-tile-"][class*="-selected"] button {
+ border-color:#284a30; box-shadow:0 0 0 1px #284a30; }
+div[class*="st-key-area-tile-"] button p { text-align:center; }
+div[class*="st-key-area-tile-normal-"] button p { color:#284a30; font-size:.75rem; }
+div[class*="st-key-area-tile-out_of_range-"] button p { color:#526352; font-size:.75rem; }
+div[class*="st-key-area-tile-offline_unknown-"] button p { color:#475b48; font-size:.75rem; }
+div[class*="st-key-area-tile-"] button p strong { font-size:calc(.75rem + 10px); }
+.st-key-area_detail { background:#fff; border:1px solid #dce4d6; border-radius:14px;
+ min-height:110px; padding:14px 16px; margin-top:10px; }
+.st-key-area_detail [data-testid="stHorizontalBlock"] { gap:.65rem; }
+.st-key-area_detail [data-testid="stColumn"] [data-testid="stVerticalBlock"] { gap:.15rem; }
+.st-key-area_detail [data-testid="stCaptionContainer"] {
+ color:#526352; line-height:1.1; margin-bottom:2px;
+ font-size:calc(1rem); font-style:normal; color:#000; }
+.st-key-area_detail [data-testid="stMarkdownContainer"] p {
+ color:#18372a; margin:0; line-height:1.25; font-size:calc(1rem + 10px); }
+.st-key-area_detail .area-header {
+ margin:0; }
+.st-key-area_detail .area-title-row {
+ display:flex; align-items:center; gap:10px; }
+.st-key-area_detail .area-last-seen {
+ color:#526352; font-size:.8rem; line-height:1.2; margin-top:3px; }
+.st-key-area_detail .area-header .area-name {
+ font-weight:700; font-size:1.1rem; color:#18372a; }
+.st-key-area_detail .area-header .area-status {
+ display:inline-flex; align-items:center; justify-content:center;
+ padding:4px 10px; border-radius:8px; background:#d9f4df; color:#284a30;
+ font-size:0.9rem; font-weight:600; line-height:1.2; }
+.st-key-area_detail .area-value-row { margin-top:4px; }
 @media(max-width:540px) {
  .gh-dashboard-hero { padding:22px 18px; }
  .st-key-sensor_trends { padding:12px; }
+ .st-key-area_overview_card { padding:18px 16px; }
+ .st-key-area_map_panel { padding:12px 10px 8px; }
 }
 </style>
 <header class="gh-dashboard-hero"><p>Greenhouse Project / Dashboard</p>
@@ -104,6 +227,151 @@ def update_dashboard():
                 with st.container(horizontal=True, horizontal_alignment="right"):
                     st.page_link("views/sensors.py", label="Review")
 
+#----------- APART OF KPI SUMMARY --------------------------------------------
+    unit = temperature_unit()
+    area_to_sensor = {s["area_id"]: s["id"] for s in sensors if s.get("area_id")}
+    try:
+        overview = api_get("/api/v1/areas/overview")
+    except (requests.RequestException, ValueError):
+        st.error("Unable to load the area overview.")
+    else:
+        area_entries = [(zone, area) for zone in overview["zones"] for area in zone["areas"]]
+        areas_by_id = {area["id"]: (zone, area) for zone, area in area_entries}
+
+        with st.container(key="area_overview_card"):
+            total, normal, attention = area_kpis(overview["summary"])
+            kpi_cols = st.columns([0.75, 0.75, 0.75, 7.75], gap="small")
+            with kpi_cols[0]:
+                st.markdown(
+                    '<div class="area-kpi">'
+                    f'<div class="area-kpi-value">{total}</div>'
+                    '<div class="area-kpi-label">Areas</div>'
+                    '</div>',
+                    unsafe_allow_html=True,
+                )
+            with kpi_cols[1]:
+                with st.container(key="area_kpi_in_range"):
+                    st.markdown(
+                        '<div class="area-kpi area-kpi--normal">'
+                        f'<div class="area-kpi-value">{normal}</div>'
+                        '<div class="area-kpi-label">In range</div>'
+                        '</div>',
+                        unsafe_allow_html=True,
+                    )
+            with kpi_cols[2]:
+                with st.container(key="area_kpi_attention"):
+                    st.markdown(
+                        '<div class="area-kpi area-kpi--attention">'
+                        f'<div class="area-kpi-value">{attention}</div>'
+                        '<div class="area-kpi-label">Attention</div>'
+                        '</div>',
+                        unsafe_allow_html=True,
+                    )
+
+            legend = "".join(
+                f'<span class="area-map-legend-item">'
+                f'<span style="color:{v["dot"]}">●</span> {v["label"]}</span>'
+                for v in STATUS_DISPLAY.values()
+            )
+            st.markdown(
+                '<div class="area-map-header">'
+                '<div class="area-map-title">Greenhouse Map</div>'
+                f'<div class="area-map-legend">{legend}</div>'
+                '</div>',
+                unsafe_allow_html=True,
+            )
+
+            with st.container(key="area_map_panel"):
+                if not area_entries:
+                    st.info("No areas configured yet.")
+                for row in chunk(area_entries, 4):
+                    cols = st.columns(1 if len(row) == 1 else 4, gap="small")
+                    for col, (zone, area) in zip(cols, row):
+                        sensor_id = area_to_sensor.get(area["id"])
+                        status = STATUS_DISPLAY[area["state"]]
+                        temperature = to_display(area["temperature"], unit)
+                        temp_text = f"{temperature:g}{unit}" if temperature is not None else "No data"
+                        tile_name = f"{zone.get('name') or 'Unassigned'} - {area.get('name') or 'Unnamed'}"
+                        selected = str(area["id"]) == str(st.session_state.get("selected_area_id"))
+                        tile_key = f"area-tile-{area['state']}-{area['id']}"
+                        if selected:
+                            tile_key += "-selected"
+                        with col:
+                            if st.button(
+                                f"{tile_name}\n\n**{temp_text}**\n\n{status['icon']}",
+                                key=tile_key, help=status["label"],
+                                disabled=sensor_id is None, use_container_width=True,
+                            ):
+                                st.session_state["selected_area_id"] = area["id"]
+                                st.session_state["trend_sensor"] = sensor_id
+                                st.rerun()
+
+            selected_area_id = st.session_state.get("selected_area_id")
+            zone, selected_area = areas_by_id.get(selected_area_id, (None, None))
+            if selected_area:
+                status = STATUS_DISPLAY[selected_area["state"]]
+                temperature = to_display(selected_area["temperature"], unit)
+                low = to_display(selected_area["temperature_min"], unit)
+                high = to_display(selected_area["temperature_max"], unit)
+                range_text = f"{low:g}–{high:g}{unit}" if low is not None and high is not None else "Not configured"
+                battery = None
+                last_seen_text = "No sensor reading yet"
+                sensor_id = area_to_sensor.get(selected_area_id)
+                if sensor_id is not None:
+                    try:
+                        sensor_health = api_get("/api/v1/sensors/health").get("sensors", [])
+                    except (requests.RequestException, ValueError):
+                        st.error("Unable to load sensor health data.")
+                    else:
+                        sensor_info = next(
+                            (sensor for sensor in sensor_health
+                             if str(sensor.get("id")) == str(sensor_id)),
+                            {},
+                        )
+                        battery = sensor_info.get("battery")
+                        minutes_ago = sensor_info.get("minutes_since_last_seen")
+                        if minutes_ago is not None:
+                            if minutes_ago < 1:
+                                last_seen_text = "Recorded less than a minute ago"
+                            elif minutes_ago < 60:
+                                unit_label = "minute" if minutes_ago == 1 else "minutes"
+                                last_seen_text = f"Recorded {minutes_ago} {unit_label} ago"
+                            elif minutes_ago < 1440:
+                                hours = minutes_ago // 60
+                                last_seen_text = f"Recorded {hours} hour{'s' if hours != 1 else ''} ago"
+                            else:
+                                days = minutes_ago // 1440
+                                last_seen_text = f"Recorded {days} day{'s' if days != 1 else ''} ago"
+                with st.container(key="area_detail"):
+                    detail_cols = st.columns([2.2, 1, 1, 1, 1.3], vertical_alignment="center")
+                    with detail_cols[0]:
+                        st.markdown(
+                            "<div class='area-header'>"
+                            "<div class='area-title-row'>"
+                            f"<span class='area-name'>{zone.get('name') or 'Unassigned'} - "
+                            f"{selected_area.get('name') or 'Unnamed'}</span>"
+                            f"<span class='area-status'>{status['label']}</span>"
+                            "</div>"
+                            f"<div class='area-last-seen'>{last_seen_text}</div>"
+                            "</div>",
+                            unsafe_allow_html=True,
+                        )
+                    with detail_cols[1]:
+                        st.caption("Temperature")
+                        st.markdown(
+                            f"**{temperature:g}{unit}**" if temperature is not None else "**—**"
+                        )
+                    with detail_cols[2]:
+                        st.caption("Humidity")
+                        humidity = selected_area["humidity"]
+                        st.markdown(f"**{humidity:g}%**" if humidity is not None else "**—**")
+                    with detail_cols[3]:
+                        st.caption("Battery")
+                        st.markdown(f"**{battery:g}%**" if battery is not None else "**—**")
+                    with detail_cols[4]:
+                        st.caption("Required range")
+                        st.markdown(f"**{range_text}**")
+#----------------------------------------------------------------
     sensor_options = {s["id"]: s.get("name") or s.get("hardware_id") or s["id"]
                       for s in sensors}
 
@@ -124,13 +392,24 @@ def update_dashboard():
     # Clear a removed sensor selection before creating its widget.
     if st.session_state.get("trend_sensor") not in sensor_options:
         st.session_state.pop("trend_sensor", None)
-    selected_id = st.selectbox("Select a sensor", list(sensor_options),
-                               format_func=sensor_options.get, key="trend_sensor")
+    selected_id = st.segmented_control(
+        "Select a sensor",
+        options=list(sensor_options),
+        default=next(iter(sensor_options), None),
+        format_func=sensor_options.get,
+        key="trend_sensor",
+        selection_mode="single",
+    )
 
     with st.container(key="sensor_trends"):
         st.subheader("Temperature & Humidity Over Time")
-        period = st.selectbox("Time range", [*RANGES, "All history", "Custom"],
-                              index=1, key="trend_range")
+        period = st.segmented_control(
+            "Time range",
+            options=[*RANGES, "All history", "Custom"],
+            default="7 days",
+            key="trend_range",
+            selection_mode="single",
+        )
         now = datetime.now(timezone.utc)
         start = end = None
         if period in RANGES:
@@ -167,9 +446,13 @@ def update_dashboard():
         if filtered.empty:
             st.info("No sensor data available for this range. Try All history or different dates.")
             return
-        st.altair_chart(time_series_chart(filtered, ["Temperature", "Humidity"],
-                                          colors=["#28734f", "#91b44c"], height=360),
-                        use_container_width=True)
+        chart = time_series_chart(
+            filtered, ["Temperature", "Humidity"],
+            colors=["#28734f", "#91b44c"], height=360,
+        ).properties(background="#fff").configure_axis(
+            labelColor="#000", titleColor="#000",
+        ).configure_legend(labelColor="#000", titleColor="#000")
+        st.altair_chart(chart, use_container_width=True)
         st.caption(f"{len(filtered):,} readings · "
                    f"{filtered['Date'].min():%Y-%m-%d %H:%M} — "
                    f"{filtered['Date'].max():%Y-%m-%d %H:%M} UTC")
@@ -179,210 +462,5 @@ def update_dashboard():
             st.error("Unable to load greenhouse zones.")
             return
 
-        display_zone_cards(zones, sensors)
-
- # Customization for sensor display cards and expandable sections
-    st.subheader("Sensor Display")
-
- #Getting hardware ids / sensor identifiers from the backend
-    response = requests.get(f"{BACKEND_URL}/api/v1/sensors")
-    response.raise_for_status()
-    sensors = response.json().get("sensors", [])
-    sensor_id = [sensor["id"] for sensor in sensors]
-
-
-# Overwriting the sensor IDs with custom names for display purposes!!!
-
-
-#Getting the list of assigned zones...
-    response = requests.get(f"{BACKEND_URL}/api/v1/zones")
-    response.raise_for_status()
-    zones = response.json().get("zones", [])
-
-    area_names = {
-        area["id"]: area["name"]
-        for zone in zones
-        for area in zone.get("areas", [])
-    }
-    zone_names = {
-        zone["id"]: zone["name"]
-        for zone in zones
-    }
-
-#Getting the latest temperature, humidity, and battery data for each sensor
-
-# Creating four empty dictionaries  using the sensor ID as a key
-    temp_id = {}
-    humidity_id = {}
-    battery_id = {}
-    timestamp = {}
-
-
-    # Loops through every sensor ID
-    for sensor_name in sensor_id:
-        sensor_response = requests.get(f"{BACKEND_URL}/api/v1/sensor_data/{sensor_name}")
-        sensor_response.raise_for_status()
-        sensor_data = sensor_response.json().get("sensor_data", [])
-        latest = sensor_data[-1] if sensor_data else {}
-        values = latest.get("values", [])
-
-        latest_timestamp = latest.get("timestamp")
-        #Converting timestamp into something more readable
-        timestamp[sensor_name] = (
-            pd.to_datetime(latest_timestamp).strftime("%Y-%m-%d %I:%M %p")
-            if latest_timestamp
-            else "N/A"
-        )
-
-        for value in values:
-            value_type = value.get("type")
-            value_data = value.get("value")
-
-            if value_type == "temperature":
-                temp_id[sensor_name] = value_data
-            elif value_type == "humidity":
-                humidity_id[sensor_name] = value_data
-            elif value_type == "battery":
-                battery_id[sensor_name] = value_data
-
-
-# Dynmaically adding expanders for each sensors added!
-# Displaying zone details for the first three sensors
-    for index, sensor_name in enumerate(sensor_id): # This class functions like an iterator...starting num is 0 and increases index!
-        sensor = next(sensor for sensor in sensors if sensor["id"] == sensor_name)
-        area_name = area_names.get(sensor.get("area_id"), "Unassigned")
-
-        with st.expander(f"Sensor {index + 1}"): # makes new expanders!
-            st.write(f"Sensor Name: {sensor_name} ")
-            st.write(f"Zone: {zone_names.get(sensor.get('zone_id'), 'Unassigned')}")
-            st.write(f"Area: {area_names.get(sensor.get('area_id'), 'Unassigned')}")
-            st.write(f"Latest Temperature: {temp_id.get(sensor_name, 'N/A')}")
-            st.write(f"Latest Humidity: {humidity_id.get(sensor_name, 'N/A')}")
-            st.write(f"Battery Percentage: {battery_id.get(sensor_name, 'N/A')}")
-            st.write(f"Last Reported Timestamp: {timestamp.get(sensor_name, 'N/A')}")
-
-
-# Getting readings for the cards
-def get_latest_reading(sensor_id):
-    try:
-        response = api_get(f"/api/v1/sensor_data/{sensor_id}/latest")
-        reading = response.get("sensor_data", {})
-        values = { item.get("type"): item.get("value") for item in reading.get("values", [])}
-
-        return { "temperature": values.get("temperature"), "humidity": values.get("humidity"), }
-
-    except requests.RequestException:
-        return None
-    except (ValueError, TypeError, AttributeError):
-        return None
-
-# For getting limits on temp and humidity 
-def get_environment_status(zone, sensor, reading):
-    if sensor is None or reading is None:
-        return "No data"
-
-    area = next(
-        (
-            area for area in zone.get("areas", [])
-            if str(area.get("id")) == str(sensor.get("area_id"))
-        ),
-        None
-    )
-    if area is None:
-        return "Limits not configured"
-    
-    conditions = area.get("target_conditions", {})
-    alerts = []
-
-    for measurement in ("temperature", "humidity"):
-        value = reading.get(measurement)
-        limits = conditions.get(measurement, {})
-
-        if value is None:
-            continue
-
-        minimum = limits.get("min")
-        maximum = limits.get("max")
-
-        if minimum is not None and value < minimum:
-            alerts.append(f"{measurement.title()} low")
-        if maximum is not None and value > maximum:
-            alerts.append(f"{measurement.title()} high")
-
-    return ", ".join(alerts) if alerts else "Normal"
-
-
-
-def display_zone_cards(zones, sensors):
-    st.subheader("Greenhouse Zones")
-
-    if not zones:
-        st.info("No greenhouse zones available.")
-        return
-
-    if "selected_zone" not in st.session_state:
-        st.session_state.selected_zone = None
-
-    columns_per_row = 3
-    for row_start in range(0, len(zones), columns_per_row):
-        columns = st.columns(columns_per_row)
-
-        for col, zone in zip( columns, zones[row_start:row_start + columns_per_row]):
-            zone_id = str(zone["id"])
-            # Find the sensor assigned to this zone
-            sensor = next(
-                (
-                    s for s in sensors
-                    if str(s.get("zone_id")) == zone_id
-                ),
-                None
-            )
-            # Retrieve latest readings
-            reading = (
-                get_latest_reading(sensor["id"])
-                if sensor else None
-            )
-            temperature = (
-                reading.get("temperature")
-                if reading else None
-            )
-            humidity = (
-                reading.get("humidity")
-                if reading else None
-            )
-            status = get_environment_status(
-                zone, sensor, reading
-            )
-            with col:
-                with st.container(border=True):
-                    st.markdown(f"### {zone['name']}")
-
-                    st.metric(
-                        "Temperature",
-                        f"{temperature}°"
-                        if temperature is not None else "No data"
-                    )
-                    st.metric(
-                        "Humidity",
-                        f"{humidity}%"
-                        if humidity is not None else "No data"
-                    )
-                    if status == "Normal":
-                        st.success(status)
-                    elif status == "No data":
-                        st.info(status)
-                    elif status == "Limits not configured":
-                        st.info(status)
-                    else:
-                        st.warning(status)
-
-                    if st.button(
-                        "View zone",
-                        key=f"zone_{zone_id}",
-                        use_container_width=True
-                    ):
-                        st.session_state.selected_zone = zone_id
-                        st.session_state.pending_zone_sensor = True
-                        st.rerun()
-                        
+                 
 update_dashboard()
