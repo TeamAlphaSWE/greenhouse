@@ -86,8 +86,8 @@ html, body, .stApp, [data-testid="stAppViewContainer"], [data-testid="stMain"],
 .st-key-sensor_trends .st-key-trend_sensor button *,
 .st-key-sensor_trends .st-key-trend_range button,
 .st-key-sensor_trends .st-key-trend_range button * {
- color:#fff !important;
- -webkit-text-fill-color:#fff !important;
+ color:#d4af37 !important;
+ -webkit-text-fill-color:#d4af37 !important;
 }
 .st-key-sensor_trends h1, .st-key-sensor_trends h2, .st-key-sensor_trends h3,
 .st-key-sensor_trends p, .st-key-sensor_trends label,
@@ -167,7 +167,8 @@ div[class*="st-key-area-tile-"] button p strong { font-size:calc(.75rem + 10px);
  display:inline-flex; align-items:center; justify-content:center;
  padding:4px 10px; border-radius:8px; background:#d9f4df; color:#284a30;
  font-size:0.9rem; font-weight:600; line-height:1.2; }
-.st-key-area_detail .area-value-row { margin-top:4px; }
+.st-key-area_detail .area-value-row { margin-top:4px; }]
+
 @media(max-width:540px) {
  .gh-dashboard-hero { padding:22px 18px; }
  .st-key-sensor_trends { padding:12px; }
@@ -378,20 +379,7 @@ def update_dashboard():
     sensor_options = {s["id"]: s.get("name") or s.get("hardware_id") or s["id"]
                       for s in sensors}
 
-    # Change the dropdown if a card has been pressed
-    if st.session_state.pop("pending_zone_sensor", False):
-        selected_zone = st.session_state.get("selected_zone")
-        if selected_zone:
-            zone_sensor = next(
-                (
-                    s for s in sensors
-                    if str(s.get("zone_id")) == str(selected_zone)
-                ),
-                None
-            )
-            if zone_sensor and zone_sensor["id"] in sensor_options:
-                st.session_state["trend_sensor"] = zone_sensor["id"]
-
+    
     # Clear a removed sensor selection before creating its widget.
     if st.session_state.get("trend_sensor") not in sensor_options:
         st.session_state.pop("trend_sensor", None)
@@ -459,11 +447,8 @@ def update_dashboard():
         st.caption(f"{len(filtered):,} readings · "
                    f"{filtered['Date'].min():%Y-%m-%d %H:%M} — "
                    f"{filtered['Date'].max():%Y-%m-%d %H:%M} UTC")
-        try: # Getting the cards out under the chart
-            zones = api_get("/api/v1/zones").get("zones", [])
-        except (requests.RequestException, ValueError):
-            st.error("Unable to load greenhouse zones.")
-            return
+       
+        return
 
                  
 update_dashboard()
