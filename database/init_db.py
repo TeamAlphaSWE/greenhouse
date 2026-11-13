@@ -241,12 +241,52 @@ try:
         }
     }
 
+    ALERTS_VALIDATOR = {
+        "$jsonSchema": {
+            "bsonType": "object",
+            "required": [
+                "_id",
+                "sensor_id",
+                "zone_id",
+                "area_id",
+                "type",
+                "value",
+                "message",
+                "created_at"
+            ],
+            "properties": {
+                "sensor_id": {
+                    "bsonType": "objectId"
+                },
+                "zone_id": {
+                    "bsonType": "objectId"
+                },
+                "area_id": {
+                    "bsonType": "objectId"
+                },
+                "type": {
+                    "bsonType": "string"
+                },
+                "value": {
+                    "bsonType": ["double", "int", "long", "decimal"]
+                },
+                "message": {
+                    "bsonType": "string"
+                },
+                "created_at": {
+                    "bsonType": "date"
+                }
+            }
+        }
+    }
+
     # Store all collection names and their validators together.
     COLLECTIONS = {
         "sensors": SENSORS_VALIDATOR,
         "zones": ZONES_VALIDATOR,
         "sensor_data": SENSOR_DATA_VALIDATOR,
         "users": USERS_VALIDATOR,
+        "alerts": ALERTS_VALIDATOR,
         "maps": MAPS_VALIDATOR
     }
 
