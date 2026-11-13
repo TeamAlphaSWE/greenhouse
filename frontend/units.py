@@ -23,3 +23,9 @@ def to_display(celsius, unit):
 def temperature_unit():
     """The user's preferred unit for this session, Celsius by default."""
     return st.session_state.get("temperature_unit", CELSIUS)
+
+
+def fmt(value, decimals=1):
+    """Format a number to at most `decimals` places, dropping a trailing zero (20.0 -> "20")."""
+    text = f"{value:.{decimals}f}"
+    return text.rstrip("0").rstrip(".") if "." in text else text

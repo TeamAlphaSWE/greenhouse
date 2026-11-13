@@ -185,6 +185,9 @@ try:
                             "text": {
                                 "bsonType": "string"
                             },
+                            "label": {
+                                "bsonType": "string"
+                            },
                             "x": {
                                 "bsonType": ["double", "int"]
                             },
