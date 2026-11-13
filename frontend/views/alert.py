@@ -5,10 +5,9 @@ import streamlit as st
 
 from alert_utils import describe_alert
 from sensor_api import get_alerts, get_zones
+from theme import page_header
 
-
-st.title("Greenhouse Alerts")
-st.write("View temperature and humidity alerts for greenhouse zones.")
+page_header("Greenhouse Alerts", "View temperature and humidity alerts for greenhouse zones.")
 
 st.divider()
 

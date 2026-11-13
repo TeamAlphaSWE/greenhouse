@@ -67,7 +67,6 @@ st.markdown(
         height: 100vh !important;
         max-height: 100vh !important;
         overflow: hidden !important;
-        background: #fffefa !important;
     }}
 
     .block-container {{

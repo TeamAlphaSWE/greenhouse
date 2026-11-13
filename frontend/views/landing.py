@@ -1,29 +1,25 @@
 """One sensor-history chart with shared temperature/humidity axis (issue #162)."""
 from datetime import datetime, time, timedelta, timezone
+from html import escape
 from pathlib import Path
 import os
 
 import pandas as pd
 import requests
 import streamlit as st
-from PIL import Image, ImageDraw, ImageFont
-from streamlit_image_coordinates import streamlit_image_coordinates
+from PIL import Image
 
 from charts import time_series_chart
+from components.area_map import area_map
+from theme import inject_sidebar
 from units import fmt, temperature_unit, to_display
 
 BACKEND_URL = os.environ.get("BACKEND_URL", "https://greenhouse.kentcs.org").rstrip("/")
 ASSETS = Path(__file__).resolve().parent.parent / "assets"
 RANGES = {"24 hours": 1, "7 days": 7, "30 days": 30}
-MAP_DISPLAY_WIDTH = 760
-MAP_BACKGROUND = "#f6f7ef"  # matches .st-key-area_map_panel so the canvas has no visible white box
-
-
-def tint(hex_color, amount, background=MAP_BACKGROUND):
-    """`hex_color` blended into the map's background at `amount` (0-1) opacity, as a flat RGB color."""
-    fg = tuple(int(hex_color[i:i + 2], 16) for i in (1, 3, 5))
-    bg = tuple(int(background[i:i + 2], 16) for i in (1, 3, 5))
-    return tuple(round(b + (f - b) * amount) for f, b in zip(fg, bg))
+MAP_VIEWBOX_WIDTH = 1000
+MAP_DISPLAY_MAX_WIDTH = 760  # caps how tall a wide map can render so the page below it stays visible
+MAP_FILLER_FONT_SIZE = 18  # keep in sync with .map-label-filler below - fit_label() sizes against this
 
 
 def history_frame(readings, sensor_id):
@@ -75,145 +71,107 @@ def rotate_region(region):
     return {**region, "x": y, "y": 1 - x - w, "w": h, "h": w}
 
 
-def region_at(regions, x_fraction, y_fraction):
-    """The first area-linked region containing a click; filler shapes never match."""
-    for region in regions:
-        if region.get("area_id") is None:
-            continue
-        if (region["x"] <= x_fraction <= region["x"] + region["w"]
-                and region["y"] <= y_fraction <= region["y"] + region["h"]):
-            return region
-    return None
-
-
-def place_label(draw, font, box, label, canvas_height, center=False):
-    """Draw a region's label inside its box, or beside it with a leader line if it would
-    overflow. Dropped entirely if there's no room above or below (e.g. a sliver-thin region).
-    `center` places it in the middle of the box instead of pinned to the top-left corner."""
+def fit_label(label, available_width, font_size=MAP_FILLER_FONT_SIZE, avg_char_width=0.55):
+    """Truncate `label` with an ellipsis so it fits `available_width` user-units at
+    `font_size`, or drop it entirely if there's no room for even one character."""
     if not label:
-        return
-    left, top, right, bottom = draw.textbbox((0, 0), label, font=font)
-    text_w, text_h = right - left, bottom - top
-    box_w, box_h = box[2] - box[0], box[3] - box[1]
-    if text_w + 8 <= box_w and text_h + 8 <= box_h:
-        if center:
-            xy = (box[0] + (box_w - text_w) / 2 - left, box[1] + (box_h - text_h) / 2 - top)
-        else:
-            xy = (box[0] + 4, box[1] + 4)
-        draw.text(xy, label, fill="#18372a", font=font)
-        return
-
-    fits_above = box[1] - text_h - 8 >= 0
-    fits_below = box[3] + text_h + 8 <= canvas_height
-    if not fits_above and not fits_below:
-        return
-
-    center_x = (box[0] + box[2]) / 2
-    above = fits_above
-    label_y = box[1] - text_h - 6 if above else box[3] + 6
-    draw.line(
-        [(center_x, box[1] if above else box[3]), (center_x, label_y + text_h if above else label_y)],
-        fill="#668675", width=1,
-    )
-    draw.text((center_x - text_w / 2, label_y), label, fill="#18372a", font=font)
+        return ""
+    max_chars = int(available_width / (font_size * avg_char_width))
+    if max_chars >= len(label):
+        return label
+    if max_chars <= 1:
+        return ""
+    return label[:max_chars - 1] + "…"
 
 
-def place_zone_block(draw, name_font, value_font, box, name, value_text, canvas_height):
-    """Zone name plus its current reading, stacked and centered in the box. Falls back to
-    just the name (with place_label's own overflow handling) if the two lines don't fit."""
-    if not value_text:
-        place_label(draw, name_font, box, name, canvas_height, center=True)
-        return
-
-    name_left, name_top, name_right, name_bottom = draw.textbbox((0, 0), name, font=name_font)
-    name_w, name_h = name_right - name_left, name_bottom - name_top
-    value_left, value_top, value_right, value_bottom = draw.textbbox((0, 0), value_text, font=value_font)
-    value_w, value_h = value_right - value_left, value_bottom - value_top
-
-    gap = 6
-    block_w, block_h = max(name_w, value_w), name_h + gap + value_h
-    box_w, box_h = box[2] - box[0], box[3] - box[1]
-    if block_w + 8 > box_w or block_h + 8 > box_h:
-        place_label(draw, name_font, box, name, canvas_height, center=True)
-        return
-
-    block_top = box[1] + (box_h - block_h) / 2
-    draw.text(
-        (box[0] + (box_w - name_w) / 2 - name_left, block_top - name_top),
-        name, fill="#18372a", font=name_font,
-    )
-    value_y = block_top + name_h + gap
-    draw.text(
-        (box[0] + (box_w - value_w) / 2 - value_left, value_y - value_top),
-        value_text, fill="#18372a", font=value_font,
-    )
-
-
-def draw_map(image, regions, areas_with_sensor, areas_by_id, unit, selected_area_id):
-    """Canvas sized to the source image's aspect ratio (rotated 90° left), painted to match
-    the surrounding panel so it never shows as a white box, with only our generated region
-    boxes drawn on it.
+def region_svg(region, areas_with_sensor, areas_by_id, unit, selected_area_id, vb_width, vb_height):
+    """One region as an SVG fragment: a box plus centered label, linked to its area if it
+    has one. A plain `<a href>` makes a click just a page navigation Streamlit reads back
+    from the URL (see the `area_id` query-param handling in update_dashboard).
 
     Area-linked regions: muted green with no sensor assigned; otherwise colored by the
     area's status (green normal, red out_of_range, gray offline_unknown). Filler shapes
-    stay thin gray. `regions` is expected to already be rotated (see rotate_region).
+    stay thin gray outlines. `regions` is expected to already be rotated (see rotate_region).
     """
-    width, height = image.size
-    display_height = round(MAP_DISPLAY_WIDTH * width / height)
-    overlay = Image.new("RGB", (MAP_DISPLAY_WIDTH, display_height), MAP_BACKGROUND)
-    draw = ImageDraw.Draw(overlay)
-    zone_font = ImageFont.load_default(size=16)
-    value_font = ImageFont.load_default(size=20)
-    filler_font = ImageFont.load_default(size=14)
-    for region in regions:
-        box = (
-            region["x"] * MAP_DISPLAY_WIDTH,
-            region["y"] * display_height,
-            (region["x"] + region["w"]) * MAP_DISPLAY_WIDTH,
-            (region["y"] + region["h"]) * display_height,
+    x, y = region["x"] * vb_width, region["y"] * vb_height
+    w, h = region["w"] * vb_width, region["h"] * vb_height
+    area_id = region.get("area_id")
+
+    if area_id is None:
+        rect = f'<rect x="{x:.1f}" y="{y:.1f}" width="{w:.1f}" height="{h:.1f}" class="map-filler"/>'
+        label = escape(fit_label(region.get("text") or "", w - 8))
+        text = (
+            f'<text x="{x + w / 2:.1f}" y="{y + h / 2:.1f}" text-anchor="middle" '
+            f'dominant-baseline="middle" class="map-label-filler">{label}</text>'
+        ) if label else ""
+        return rect + text
+
+    selected = str(area_id) == str(selected_area_id)
+    zone_name = region.get("zone_name") or ""
+    if area_id not in areas_with_sensor:
+        color, opacity = "#668675", (0.3 if selected else 0.08)
+        tooltip, lines = NO_SENSOR_DISPLAY["label"], [(zone_name, "name")]
+    else:
+        _, area = areas_by_id.get(area_id, (None, None))
+        state = area["state"] if area else "offline_unknown"
+        color = {"out_of_range": "#d32f2f", "offline_unknown": "#808080"}.get(state, "#2e7d32")
+        base_opacity = {"out_of_range": 0.2, "offline_unknown": 0.12}.get(state, 0.15)
+        selected_opacity = {"out_of_range": 0.45, "offline_unknown": 0.35}.get(state, 0.4)
+        opacity = selected_opacity if selected else base_opacity
+        tooltip = STATUS_DISPLAY[state]["label"]
+        temperature = to_display(area.get("temperature"), unit) if area else None
+        temp_text = f"{fmt(temperature)}{unit}" if temperature is not None else None
+        lines = [(zone_name, "name"), (temp_text, "value")]
+    lines = [(text_line, kind) for text_line, kind in lines if text_line]
+
+    rect = (
+        f'<rect x="{x:.1f}" y="{y:.1f}" width="{w:.1f}" height="{h:.1f}" rx="4" '
+        f'fill="{color}" fill-opacity="{opacity}" stroke="{color}" stroke-width="3"/>'
+    )
+    if selected:
+        rect += (
+            f'<rect x="{x - 1:.1f}" y="{y - 1:.1f}" width="{w + 2:.1f}" height="{h + 2:.1f}" '
+            f'rx="5" fill="none" stroke="#d4af37" stroke-width="3"/>'
         )
-        area_id = region.get("area_id")
-        if area_id is not None:
-            selected = str(area_id) == str(selected_area_id)
-            if area_id not in areas_with_sensor:
-                color, width_px = "#668675", 2
-                amount = 0.3 if selected else 0.08
-                draw.rectangle(box, outline=color, fill=tint(color, amount), width=width_px)
-                place_label(draw, zone_font, box, region.get("zone_name"), display_height, center=True)
-            else:
-                _, area = areas_by_id.get(area_id, (None, None))
-                state = area["state"] if area else "offline_unknown"
-                width_px = 3
-                if state == "out_of_range":
-                    color, amount = "#d32f2f", (0.45 if selected else 0.2)
-                elif state == "offline_unknown":
-                    color, amount = "#808080", (0.35 if selected else 0.12)
-                else:
-                    color, amount = "#2e7d32", (0.4 if selected else 0.15)
-                draw.rectangle(box, outline=color, fill=tint(color, amount), width=width_px)
-                temperature = to_display(area.get("temperature"), unit) if area else None
-                temp_text = f"{fmt(temperature)}{unit}" if temperature is not None else None
-                place_zone_block(
-                    draw, zone_font, value_font, box, region.get("zone_name"), temp_text, display_height,
-                )
-        else:
-            draw.rectangle(box, outline="#9aa79a", width=1)
-            place_label(draw, filler_font, box, region.get("text"), display_height, center=False)
-    return overlay, display_height
+    line_height = 22
+    start_y = y + h / 2 - (len(lines) - 1) * line_height / 2
+    text = "".join(
+        f'<text x="{x + w / 2:.1f}" y="{start_y + i * line_height:.1f}" text-anchor="middle" '
+        f'dominant-baseline="middle" class="{"map-label-name" if kind == "name" else "map-label-value"}"'
+        + (f' style="fill:{color}"' if kind == "name" else "")
+        + f'>{escape(text_line)}</text>'
+        for i, (text_line, kind) in enumerate(lines)
+    )
+    return (f'<g data-area-id="{area_id}" class="map-region">'
+            f'<title>{escape(tooltip)}</title>{rect}{text}</g>')
+
+
+def render_map(regions, areas_with_sensor, areas_by_id, unit, selected_area_id, image_width, image_height):
+    """Inline SVG of the floor plan (rotated 90° left so a tall source image lays out wide
+    on the dashboard - see rotate_region). Vector boxes/text stay crisp at any size, unlike
+    a rasterized image, and area-linked regions are native, hoverable, clickable links."""
+    vb_width = MAP_VIEWBOX_WIDTH
+    vb_height = round(vb_width * image_width / image_height)
+    body = "".join(
+        region_svg(region, areas_with_sensor, areas_by_id, unit, selected_area_id, vb_width, vb_height)
+        for region in regions
+    )
+    return f"""<style>
+.map-filler {{ fill: none; stroke: #9aa79a; stroke-width: 1; }}
+.map-label-filler {{ font: {MAP_FILLER_FONT_SIZE}px sans-serif; fill: #18372a; }}
+.map-label-name {{ font: 600 20px sans-serif; pointer-events: none; }}
+.map-label-value {{ font: 600 20px sans-serif; fill: #18372a; pointer-events: none; }}
+.map-region {{ cursor: pointer; }}
+.map-region rect {{ transition: fill-opacity .15s ease; }}
+.map-region:hover rect {{ filter: brightness(1.35); }}
+</style>
+<svg viewBox="0 0 {vb_width} {vb_height}" style="width:100%; max-width:{MAP_DISPLAY_MAX_WIDTH}px; height:auto; display:block; margin:0 auto;">{body}</svg>"""
 #------------------------------
+
+inject_sidebar()
 
 st.markdown("""
 <style>
-html, body, .stApp, [data-testid="stAppViewContainer"], [data-testid="stMain"],
-[data-testid="stMainBlockContainer"] {
- background:#f6f7ef !important;
-}
-[data-testid="stSidebar"], [data-testid="stSidebarNav"] {
- background:#123d2d !important;
-}
-[data-testid="stSidebarNav"] * {
- color:#fffdf4;
-}
 .gh-dashboard-hero { background:#123d2d; color:#fffdf4; padding:28px 30px;
  border-radius:20px; margin-bottom:24px; }
 .gh-dashboard-hero p { color:#d4af37; font-size:12px; font-weight:700; letter-spacing:2px;
@@ -361,6 +319,7 @@ def update_dashboard():
 #----------- APART OF KPI SUMMARY --------------------------------------------
     unit = temperature_unit()
     area_to_sensor = {s["area_id"]: s["id"] for s in sensors if s.get("area_id")}
+
     try:
         overview = api_get("/api/v1/areas/overview")
     except (requests.RequestException, ValueError):
@@ -432,24 +391,20 @@ def update_dashboard():
                     if image_path is None or not image_path.exists():
                         st.info("Map image is missing.")
                     else:
+                        image_width, image_height = Image.open(image_path).size
                         regions = [rotate_region(r) for r in map_doc.get("regions", [])]
                         selected_area_id = st.session_state.get("selected_area_id")
-                        overlay, display_height = draw_map(
-                            Image.open(image_path), regions, area_to_sensor, areas_by_id, unit, selected_area_id,
+                        svg = render_map(
+                            regions, area_to_sensor, areas_by_id, unit, selected_area_id,
+                            image_width, image_height,
                         )
-                        coords = streamlit_image_coordinates(overlay, key="greenhouse_map_click")
-                        if coords and coords != st.session_state.get("_last_map_click"):
-                            st.session_state["_last_map_click"] = coords
-                            region = region_at(
-                                regions,
-                                coords["x"] / MAP_DISPLAY_WIDTH,
-                                coords["y"] / display_height,
-                            )
-                            if region is not None:
-                                area_id = region["area_id"]
-                                st.session_state["selected_area_id"] = area_id
-                                st.session_state["trend_sensor"] = area_to_sensor.get(area_id)
-                                st.rerun()
+                        clicked = area_map(svg, key="greenhouse_map")
+                        if clicked and clicked != st.session_state.get("_last_map_click"):
+                            st.session_state["_last_map_click"] = clicked
+                            area_id = clicked["areaId"]
+                            st.session_state["selected_area_id"] = area_id
+                            st.session_state["trend_sensor"] = area_to_sensor.get(area_id)
+                            st.rerun()
 
             selected_area_id = st.session_state.get("selected_area_id")
             zone, selected_area = areas_by_id.get(selected_area_id, (None, None))
