@@ -1,13 +1,14 @@
 """One sensor-history chart with shared temperature/humidity axis (issue #162)."""
 from datetime import datetime, time, timedelta, timezone
 import os
+from zoneinfo import ZoneInfo
 
 import pandas as pd
 import requests
 import streamlit as st
 
 from charts import time_series_chart
-from units import temperature_unit, to_display
+from units import temperature_unit, to_display, to_local, viewer_timezone
 
 BACKEND_URL = os.environ.get("BACKEND_URL", "https://greenhouse.kentcs.org").rstrip("/")
 RANGES = {"24 hours": 1, "7 days": 7, "30 days": 30}
@@ -406,9 +407,11 @@ def update_dashboard():
         if period in RANGES:
             start, end = now - timedelta(days=RANGES[period]), now
         elif period == "Custom":
+            tz = ZoneInfo(viewer_timezone())
+            today_local = now.astimezone(tz).date()
             selected_dates = st.date_input(
-                "Start and end dates (UTC)",
-                value=(now.date() - timedelta(days=7), now.date()),
+                "Start and end dates",
+                value=(today_local - timedelta(days=7), today_local),
                 key="trend_dates", format="YYYY-MM-DD")
             if not isinstance(selected_dates, (tuple, list)) or len(selected_dates) != 2:
                 st.info("Select both a start date and an end date.")
@@ -417,8 +420,10 @@ def update_dashboard():
             if first > last:
                 st.error("The end date must be on or after the start date.")
                 return
-            start = datetime.combine(first, time.min, tzinfo=timezone.utc)
-            end = datetime.combine(last + timedelta(days=1), time.min, tzinfo=timezone.utc)
+            # Interpret the picked dates as local calendar days, then convert to UTC
+            # bounds so filter_history still compares apples to apples against stored data.
+            start = datetime.combine(first, time.min, tzinfo=tz).astimezone(timezone.utc)
+            end = datetime.combine(last + timedelta(days=1), time.min, tzinfo=tz).astimezone(timezone.utc)
 
         try:
             readings = api_get(f"/api/v1/sensor_data/{selected_id}").get("sensor_data", [])
@@ -429,11 +434,12 @@ def update_dashboard():
         filtered = filter_history(frame, start, end)
         unit = temperature_unit()
         filtered["Temperature"] = to_display(filtered["Temperature"], unit)
-        st.caption(f"Sensor: {sensor_options[selected_id]} · All times UTC · "
+        st.caption(f"Sensor: {sensor_options[selected_id]} · "
                    f"Temperature and humidity share one Y-axis. Temperature in {unit}, humidity in %.")
         if start is not None:
             label_end = end - timedelta(microseconds=1) if period == "Custom" else end
-            st.caption(f"Selected window: {start:%Y-%m-%d %H:%M} — {label_end:%Y-%m-%d %H:%M} UTC")
+            st.caption(f"Selected window: {to_local(start):%Y-%m-%d %H:%M} — "
+                       f"{to_local(label_end):%Y-%m-%d %H:%M %Z}")
         if filtered.empty:
             st.info("No sensor data available for this range. Try All history or different dates.")
             return
@@ -445,9 +451,8 @@ def update_dashboard():
         ).configure_legend(labelColor="#000", titleColor="#000")
         st.altair_chart(chart, use_container_width=True)
         st.caption(f"{len(filtered):,} readings · "
-                   f"{filtered['Date'].min():%Y-%m-%d %H:%M} — "
-                   f"{filtered['Date'].max():%Y-%m-%d %H:%M} UTC")
-       
+                   f"{to_local(filtered['Date'].min()):%Y-%m-%d %H:%M} — "
+                   f"{to_local(filtered['Date'].max()):%Y-%m-%d %H:%M %Z}")
         return
 
                  
