@@ -173,6 +173,16 @@ inject_sidebar()
 
 st.markdown("""
 <style>
+html, body, .stApp, [data-testid="stAppViewContainer"], [data-testid="stMain"],
+[data-testid="stMainBlockContainer"] {
+ background:#f6f7ef !important;
+}
+[data-testid="stSidebar"], [data-testid="stSidebarNav"] {
+ background:#123d2d !important;
+}
+[data-testid="stSidebarNav"] * {
+ color:#fffdf4;
+}
 .gh-dashboard-hero { background:#123d2d; color:#fffdf4; padding:28px 30px;
  border-radius:20px; margin-bottom:24px; }
 .gh-dashboard-hero p { color:#d4af37; font-size:12px; font-weight:700; letter-spacing:2px;
