@@ -6,6 +6,7 @@ import streamlit as st
 from alert_utils import describe_alert
 from sensor_api import get_alerts, get_zones
 from theme import page_header
+from units import to_local
 
 page_header("Greenhouse Alerts", "View temperature and humidity alerts for greenhouse zones.")
 
@@ -65,7 +66,7 @@ for alert in alerts:
             created_at = alert.get("created_at")
             if created_at:
                 when = datetime.fromisoformat(created_at)
-                st.caption(when.strftime("%Y-%m-%d %H:%M UTC"))
+                st.caption(to_local(when).strftime("%Y-%m-%d %H:%M %Z"))
 
         with right:
             if text["direction"] == "above":

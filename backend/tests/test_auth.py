@@ -9,12 +9,12 @@ from app.db import get_collection
 from app.repositories.users import users
 
 
-def seed_user(app, username="alice", password="correct-horse", is_admin=False):
+def seed_user(app, username="alice", password="correct-horse", admin=False):
     with app.app_context():
         return users.create({
             "username": username,
             "password_hash": generate_password_hash(password, method="pbkdf2:sha256"),
-            "is_admin": is_admin,
+            "admin": admin,
         })
 
 
@@ -216,6 +216,114 @@ def test_change_password_database_error_returns_500(app, client, monkeypatch):
         "/api/v1/change-password",
         json={"old_password": "correct-horse", "new_password": "battery-staple"},
         headers=_auth_header(app, user),
+    )
+
+    assert response.status_code == 500
+    assert response.get_json() == {"error": "Unexpected server error"}
+
+
+def test_admin_reset_password_succeeds_and_new_password_logs_in(app, client):
+    admin = seed_user(app, username="admin", password="admin-pass", admin=True)
+    target = seed_user(app, username="bob", password="old-pass")
+
+    response = client.post(
+        "/api/v1/admin/reset-password",
+        json={"username": "bob", "new_password": "new-pass"},
+        headers=_auth_header(app, admin),
+    )
+
+    assert response.status_code == 200
+    assert response.get_json() == {"message": "Password reset"}
+    assert _stored_hash(app, target).startswith("pbkdf2:sha256")
+
+    new_login = client.post("/api/v1/login", json={"username": "bob", "password": "new-pass"})
+    old_login = client.post("/api/v1/login", json={"username": "bob", "password": "old-pass"})
+    assert new_login.status_code == 200
+    assert old_login.status_code == 401
+
+
+def test_admin_reset_password_non_admin_returns_403(app, client):
+    caller = seed_user(app, username="alice", password="correct-horse")
+    target = seed_user(app, username="bob", password="old-pass")
+    hash_before = _stored_hash(app, target)
+
+    response = client.post(
+        "/api/v1/admin/reset-password",
+        json={"username": "bob", "new_password": "new-pass"},
+        headers=_auth_header(app, caller),
+    )
+
+    assert response.status_code == 403
+    assert response.get_json() == {"error": "Admin access required"}
+    assert _stored_hash(app, target) == hash_before
+
+
+def test_admin_reset_password_requires_auth(client):
+    response = client.post(
+        "/api/v1/admin/reset-password",
+        json={"username": "bob", "new_password": "new-pass"},
+    )
+
+    assert response.status_code == 401
+
+
+def test_admin_reset_password_unknown_user_returns_404(app, client):
+    admin = seed_user(app, username="admin", password="admin-pass", admin=True)
+
+    response = client.post(
+        "/api/v1/admin/reset-password",
+        json={"username": "nobody", "new_password": "new-pass"},
+        headers=_auth_header(app, admin),
+    )
+
+    assert response.status_code == 404
+    assert response.get_json() == {"error": "User not found"}
+
+
+def test_admin_reset_password_invalid_json_returns_400(app, client):
+    admin = seed_user(app, username="admin", password="admin-pass", admin=True)
+
+    response = client.post(
+        "/api/v1/admin/reset-password", data="not json", content_type="application/json",
+        headers=_auth_header(app, admin),
+    )
+
+    assert response.status_code == 400
+    assert response.get_json() == {"error": "Invalid JSON"}
+
+
+@pytest.mark.parametrize("body", [
+    {"new_password": "new-pass"},
+    {"username": "bob"},
+    {"username": "", "new_password": "new-pass"},
+    {"username": "bob", "new_password": ""},
+    {"username": "bob", "new_password": 123},
+])
+def test_admin_reset_password_validation_returns_400(app, client, body):
+    admin = seed_user(app, username="admin", password="admin-pass", admin=True)
+    target = seed_user(app, username="bob", password="old-pass")
+    hash_before = _stored_hash(app, target)
+
+    response = client.post("/api/v1/admin/reset-password", json=body, headers=_auth_header(app, admin))
+
+    assert response.status_code == 400
+    assert response.get_json() == {"error": "username and new_password are required"}
+    assert _stored_hash(app, target) == hash_before
+
+
+def test_admin_reset_password_database_error_returns_500(app, client, monkeypatch):
+    admin = seed_user(app, username="admin", password="admin-pass", admin=True)
+    seed_user(app, username="bob", password="old-pass")
+
+    def fail(*args, **kwargs):
+        raise PyMongoError("database is down")
+
+    monkeypatch.setattr(users, "set_password_hash", fail)
+
+    response = client.post(
+        "/api/v1/admin/reset-password",
+        json={"username": "bob", "new_password": "new-pass"},
+        headers=_auth_header(app, admin),
     )
 
     assert response.status_code == 500
