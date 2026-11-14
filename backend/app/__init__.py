@@ -35,4 +35,7 @@ def create_app(config=None):
     from app.routes.alerts import alerts
     app.register_blueprint(alerts)
 
+    from app.routes.maps import maps
+    app.register_blueprint(maps)
+
     return app

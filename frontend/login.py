@@ -67,7 +67,6 @@ st.markdown(
         height: 100vh !important;
         max-height: 100vh !important;
         overflow: hidden !important;
-        background: #fffefa !important;
     }}
 
     .block-container {{
@@ -303,8 +302,10 @@ with right:
         label_visibility="collapsed"
     )
 
-    if st.button("Sign In →"):
+    username=username.lower()
 
+    if st.button("Sign In →"):
+                    
         if username == "admin" and password == "1234":
             st.session_state["logged_in"] = True
             st.session_state["username"] = username

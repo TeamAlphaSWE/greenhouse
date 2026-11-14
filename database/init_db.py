@@ -66,6 +66,9 @@ try:
                 "description": {
                     "bsonType": "string"
                 },
+                "map_id": {
+                    "bsonType": "objectId"
+                },
                 "status": {
                     "enum": ["active", "inactive"]
                 },
@@ -87,6 +90,9 @@ try:
                         "properties": {
                             "name": {
                                 "bsonType": "string"
+                            },
+                            "region_id": {
+                                "bsonType": "objectId"
                             },
                             "status": {
                                 "enum": ["active", "inactive"]
@@ -144,6 +150,69 @@ try:
         }
     }
 
+    # Schema validator for maps
+    MAPS_VALIDATOR = {
+        "$jsonSchema": {
+            "bsonType": "object",
+            "required": [
+                "name",
+                "image_path",
+                "regions",
+                "created_at",
+                "updated_at"
+            ],
+            "properties": {
+                "name": {
+                    "bsonType": "string"
+                },
+                "image_path": {
+                    "bsonType": "string"
+                },
+                "regions": {
+                    "bsonType": "array",
+                    "items": {
+                        "bsonType": "object",
+                        "required": [
+                            "x",
+                            "y",
+                            "w",
+                            "h"
+                        ],
+                        "properties": {
+                            "id": {
+                                "bsonType": "objectId"
+                            },
+                            "text": {
+                                "bsonType": "string"
+                            },
+                            "label": {
+                                "bsonType": "string"
+                            },
+                            "x": {
+                                "bsonType": ["double", "int"]
+                            },
+                            "y": {
+                                "bsonType": ["double", "int"]
+                            },
+                            "w": {
+                                "bsonType": ["double", "int"]
+                            },
+                            "h": {
+                                "bsonType": ["double", "int"]
+                            }
+                        }
+                    }
+                },
+                "created_at": {
+                    "bsonType": "date"
+                },
+                "updated_at": {
+                    "bsonType": "date"
+                }
+            }
+        }
+    }
+
     # Schema validator for users
     USERS_VALIDATOR = {
         "$jsonSchema": {
@@ -180,7 +249,8 @@ try:
         "sensors": SENSORS_VALIDATOR,
         "zones": ZONES_VALIDATOR,
         "sensor_data": SENSOR_DATA_VALIDATOR,
-        "users": USERS_VALIDATOR
+        "users": USERS_VALIDATOR,
+        "maps": MAPS_VALIDATOR
     }
 
     # Create collections with schema validation.

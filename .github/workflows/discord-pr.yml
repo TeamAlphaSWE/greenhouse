@@ -20,10 +20,14 @@ jobs:
               title = `PR Opened: ${pr.title}`;
               description = pr.body || "No description";
               color = 3066993;
-            } else {
+            } else if (pr.merged) {
               title = `🎉 ${pr.user.login} merged a PR!`;
               description = pr.title;
               color = 65280;
+            } else {
+              title = `PR Closed: ${pr.title}`;
+              description = pr.title;
+              color = 15158332;
             }
             
             const contributors = pr.requested_reviewers

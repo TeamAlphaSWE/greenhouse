@@ -10,9 +10,10 @@ from sensor_api import (
     get_zones,
     readings_to_frame,
 )
-from units import temperature_unit, to_display
+from theme import page_header
+from units import temperature_unit, to_display, to_local
 
-st.title("Sensors")
+page_header("Sensors")
 
 unit = temperature_unit()
 
@@ -36,8 +37,8 @@ def show_activation_form(sensor_id, sensors):
         return
 
     st.write(f"**Hardware ID:** {sensor['hardware_id']}")
-    discovered = pd.to_datetime(sensor.get("created_at"), errors="coerce")
-    st.write(f"**Discovered:** {discovered:%Y-%m-%d %H:%M UTC}" if pd.notna(discovered) else "**Discovered:** unknown")
+    discovered = pd.to_datetime(sensor.get("created_at"), utc=True, errors="coerce")
+    st.write(f"**Discovered:** {to_local(discovered):%Y-%m-%d %H:%M %Z}" if pd.notna(discovered) else "**Discovered:** unknown")
 
     try:
         latest = get_latest_sensor_data(sensor_id)
@@ -51,9 +52,9 @@ def show_activation_form(sensor_id, sensors):
         col1.metric("Temperature", show(to_display(values.get("temperature"), unit), f" {unit}"))
         col2.metric("Humidity", f"{values['humidity']:g} %" if "humidity" in values else "—")
         col3.metric("Battery", f"{values['battery']:g} %" if "battery" in values else "—")
-        reading_time = pd.to_datetime(latest.get("timestamp"), errors="coerce")
+        reading_time = pd.to_datetime(latest.get("timestamp"), utc=True, errors="coerce")
         if pd.notna(reading_time):
-            st.caption(f"Reading from {reading_time:%Y-%m-%d %H:%M UTC}")
+            st.caption(f"Reading from {to_local(reading_time):%Y-%m-%d %H:%M %Z}")
     else:
         st.caption("No readings from this sensor yet.")
 
@@ -174,7 +175,7 @@ col1.metric("Temperature", show(None if latest is None else to_display(latest["t
 col2.metric("Humidity", show(None if latest is None else latest["humidity"], " %"))
 col3.metric("Battery", show(None if latest is None else latest["battery"], " %"))
 
-last_seen = "never" if latest is None else latest["Date"].strftime("%Y-%m-%d %H:%M UTC")
+last_seen = "never" if latest is None else to_local(latest["Date"]).strftime("%Y-%m-%d %H:%M %Z")
 st.write(f"**Zone:** {zone_names.get(sensor.get('zone_id'), 'Unassigned')}")
 st.write(f"**Status:** {sensor.get('status', 'unknown')}")
 st.write(f"**Hardware ID:** {sensor.get('hardware_id', '—')}")
