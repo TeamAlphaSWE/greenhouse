@@ -10,9 +10,10 @@ from sensor_api import (
     get_zones,
     readings_to_frame,
 )
+from theme import page_header
 from units import temperature_unit, to_display, to_local
 
-st.title("Sensors")
+page_header("Sensors")
 
 unit = temperature_unit()
 

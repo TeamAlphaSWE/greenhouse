@@ -4,6 +4,10 @@ from html import escape
 
 import streamlit as st
 
+from theme import inject_sidebar
+
+inject_sidebar()
+
 
 # Names transcribed from the supplied Alpha Group roster. No roles inferred.
 CONTRIBUTORS = (

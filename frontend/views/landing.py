@@ -1,17 +1,26 @@
 """One sensor-history chart with shared temperature/humidity axis (issue #162)."""
 from datetime import datetime, time, timedelta, timezone
+from html import escape
+from pathlib import Path
 import os
 from zoneinfo import ZoneInfo
 
 import pandas as pd
 import requests
 import streamlit as st
+from PIL import Image
 
 from charts import time_series_chart
-from units import temperature_unit, to_display, to_local, viewer_timezone
+from components.area_map import area_map
+from theme import inject_sidebar
+from units import fmt, temperature_unit, to_display, to_local, viewer_timezone
 
 BACKEND_URL = os.environ.get("BACKEND_URL", "https://greenhouse.kentcs.org").rstrip("/")
+ASSETS = Path(__file__).resolve().parent.parent / "assets"
 RANGES = {"24 hours": 1, "7 days": 7, "30 days": 30}
+MAP_VIEWBOX_WIDTH = 1000
+MAP_DISPLAY_MAX_WIDTH = 760  # caps how tall a wide map can render so the page below it stays visible
+MAP_FILLER_FONT_SIZE = 18  # keep in sync with .map-label-filler below - fit_label() sizes against this
 
 
 def history_frame(readings, sensor_id):
@@ -45,6 +54,7 @@ STATUS_DISPLAY = {
     "out_of_range": {"icon": "⚠", "label": "Alert", "dot": "#d32f2f", "badge": "gray"},
     "offline_unknown": {"icon": "?", "label": "Offline/Unknown", "dot": "#808080", "badge": "gray"},
 }
+NO_SENSOR_DISPLAY = {"label": "No sensor", "dot": "#668675"}
 
 
 def area_kpis(summary):
@@ -56,10 +66,110 @@ def area_kpis(summary):
     )
 
 
-def chunk(items, size):
-    """Split a list into row-sized pieces for a column grid."""
-    return [items[i:i + size] for i in range(0, len(items), size)]
+def rotate_region(region):
+    """Rotate a region 90° left (CCW) so a tall floor plan lays out wide on the dashboard."""
+    x, y, w, h = region["x"], region["y"], region["w"], region["h"]
+    return {**region, "x": y, "y": 1 - x - w, "w": h, "h": w}
+
+
+def fit_label(label, available_width, font_size=MAP_FILLER_FONT_SIZE, avg_char_width=0.55):
+    """Truncate `label` with an ellipsis so it fits `available_width` user-units at
+    `font_size`, or drop it entirely if there's no room for even one character."""
+    if not label:
+        return ""
+    max_chars = int(available_width / (font_size * avg_char_width))
+    if max_chars >= len(label):
+        return label
+    if max_chars <= 1:
+        return ""
+    return label[:max_chars - 1] + "…"
+
+
+def region_svg(region, areas_with_sensor, areas_by_id, unit, selected_area_id, vb_width, vb_height):
+    """One region as an SVG fragment: a box plus centered label, linked to its area if it
+    has one. A plain `<a href>` makes a click just a page navigation Streamlit reads back
+    from the URL (see the `area_id` query-param handling in update_dashboard).
+
+    Area-linked regions: muted green with no sensor assigned; otherwise colored by the
+    area's status (green normal, red out_of_range, gray offline_unknown). Filler shapes
+    stay thin gray outlines. `regions` is expected to already be rotated (see rotate_region).
+    """
+    x, y = region["x"] * vb_width, region["y"] * vb_height
+    w, h = region["w"] * vb_width, region["h"] * vb_height
+    area_id = region.get("area_id")
+
+    if area_id is None:
+        rect = f'<rect x="{x:.1f}" y="{y:.1f}" width="{w:.1f}" height="{h:.1f}" class="map-filler"/>'
+        label = escape(fit_label(region.get("text") or "", w - 8))
+        text = (
+            f'<text x="{x + w / 2:.1f}" y="{y + h / 2:.1f}" text-anchor="middle" '
+            f'dominant-baseline="middle" class="map-label-filler">{label}</text>'
+        ) if label else ""
+        return rect + text
+
+    selected = str(area_id) == str(selected_area_id)
+    zone_name = region.get("zone_name") or ""
+    if area_id not in areas_with_sensor:
+        color, opacity = "#668675", (0.3 if selected else 0.08)
+        tooltip, lines = NO_SENSOR_DISPLAY["label"], [(zone_name, "name")]
+    else:
+        _, area = areas_by_id.get(area_id, (None, None))
+        state = area["state"] if area else "offline_unknown"
+        color = {"out_of_range": "#d32f2f", "offline_unknown": "#808080"}.get(state, "#2e7d32")
+        base_opacity = {"out_of_range": 0.2, "offline_unknown": 0.12}.get(state, 0.15)
+        selected_opacity = {"out_of_range": 0.45, "offline_unknown": 0.35}.get(state, 0.4)
+        opacity = selected_opacity if selected else base_opacity
+        tooltip = STATUS_DISPLAY[state]["label"]
+        temperature = to_display(area.get("temperature"), unit) if area else None
+        temp_text = f"{fmt(temperature)}{unit}" if temperature is not None else None
+        lines = [(zone_name, "name"), (temp_text, "value")]
+    lines = [(text_line, kind) for text_line, kind in lines if text_line]
+
+    rect = (
+        f'<rect x="{x:.1f}" y="{y:.1f}" width="{w:.1f}" height="{h:.1f}" rx="4" '
+        f'fill="{color}" fill-opacity="{opacity}" stroke="{color}" stroke-width="3"/>'
+    )
+    if selected:
+        rect += (
+            f'<rect x="{x - 1:.1f}" y="{y - 1:.1f}" width="{w + 2:.1f}" height="{h + 2:.1f}" '
+            f'rx="5" fill="none" stroke="#d4af37" stroke-width="3"/>'
+        )
+    line_height = 22
+    start_y = y + h / 2 - (len(lines) - 1) * line_height / 2
+    text = "".join(
+        f'<text x="{x + w / 2:.1f}" y="{start_y + i * line_height:.1f}" text-anchor="middle" '
+        f'dominant-baseline="middle" class="{"map-label-name" if kind == "name" else "map-label-value"}"'
+        + (f' style="fill:{color}"' if kind == "name" else "")
+        + f'>{escape(text_line)}</text>'
+        for i, (text_line, kind) in enumerate(lines)
+    )
+    return (f'<g data-area-id="{area_id}" class="map-region">'
+            f'<title>{escape(tooltip)}</title>{rect}{text}</g>')
+
+
+def render_map(regions, areas_with_sensor, areas_by_id, unit, selected_area_id, image_width, image_height):
+    """Inline SVG of the floor plan (rotated 90° left so a tall source image lays out wide
+    on the dashboard - see rotate_region). Vector boxes/text stay crisp at any size, unlike
+    a rasterized image, and area-linked regions are native, hoverable, clickable links."""
+    vb_width = MAP_VIEWBOX_WIDTH
+    vb_height = round(vb_width * image_width / image_height)
+    body = "".join(
+        region_svg(region, areas_with_sensor, areas_by_id, unit, selected_area_id, vb_width, vb_height)
+        for region in regions
+    )
+    return f"""<style>
+.map-filler {{ fill: none; stroke: #9aa79a; stroke-width: 1; }}
+.map-label-filler {{ font: {MAP_FILLER_FONT_SIZE}px sans-serif; fill: #18372a; }}
+.map-label-name {{ font: 600 20px sans-serif; pointer-events: none; }}
+.map-label-value {{ font: 600 20px sans-serif; fill: #18372a; pointer-events: none; }}
+.map-region {{ cursor: pointer; }}
+.map-region rect {{ transition: fill-opacity .15s ease; }}
+.map-region:hover rect {{ filter: brightness(1.35); }}
+</style>
+<svg viewBox="0 0 {vb_width} {vb_height}" style="width:100%; max-width:{MAP_DISPLAY_MAX_WIDTH}px; height:auto; display:block; margin:0 auto;">{body}</svg>"""
 #------------------------------
+
+inject_sidebar()
 
 st.markdown("""
 <style>
@@ -136,19 +246,6 @@ html, body, .stApp, [data-testid="stAppViewContainer"], [data-testid="stMain"],
 .st-key-area_map_panel h4, .st-key-area_map_panel p,
 .st-key-area_map_panel [data-testid="stCaptionContainer"] { color:#18372a; }
 .st-key-area_map_panel [data-testid="stCaptionContainer"] { text-align:center; }
-div[class*="st-key-area-tile-normal-"] button { background:#fff; border:2px solid #668675;
- border-radius:7px; min-height:140px; height:140px; text-align:center; }
-div[class*="st-key-area-tile-out_of_range-"] button { background:#fffdf4; border:2px solid #d5dfcd;
- border-radius:7px; min-height:140px; height:140px; text-align:center; }
-div[class*="st-key-area-tile-offline_unknown-"] button { background:#e7efdc; border:2px dashed #668675;
- border-radius:7px; min-height:140px; height:140px; text-align:center; }
-div[class*="st-key-area-tile-"][class*="-selected"] button {
- border-color:#284a30; box-shadow:0 0 0 1px #284a30; }
-div[class*="st-key-area-tile-"] button p { text-align:center; }
-div[class*="st-key-area-tile-normal-"] button p { color:#284a30; font-size:.75rem; }
-div[class*="st-key-area-tile-out_of_range-"] button p { color:#526352; font-size:.75rem; }
-div[class*="st-key-area-tile-offline_unknown-"] button p { color:#475b48; font-size:.75rem; }
-div[class*="st-key-area-tile-"] button p strong { font-size:calc(.75rem + 10px); }
 .st-key-area_detail { background:#fff; border:1px solid #dce4d6; border-radius:14px;
  min-height:110px; padding:14px 16px; margin-top:10px; }
 .st-key-area_detail [data-testid="stHorizontalBlock"] { gap:.65rem; }
@@ -168,7 +265,8 @@ div[class*="st-key-area-tile-"] button p strong { font-size:calc(.75rem + 10px);
  display:inline-flex; align-items:center; justify-content:center;
  padding:4px 10px; border-radius:8px; background:#d9f4df; color:#284a30;
  font-size:0.9rem; font-weight:600; line-height:1.2; }
-.st-key-area_detail .area-value-row { margin-top:4px; }]
+.st-key-area_detail .area-value-row { margin-top:4px; }
+.st-key-area_detail .area-empty-message { color:#526352; font-size:.95rem; margin:0; }]
 
 @media(max-width:540px) {
  .gh-dashboard-hero { padding:22px 18px; }
@@ -197,7 +295,9 @@ def update_dashboard():
         return
     if not sensors:
         st.info("No sensors available.")
-        return    
+        return
+    # Match the sensor trend chart's own default (sensors[0]) so the map starts in sync with it.
+    st.session_state.setdefault("selected_area_id", sensors[0].get("area_id"))
     pending_count = sum(1 for s in sensors if s.get("status") == "pending")
     if pending_count:
         noun = "sensor is" if pending_count == 1 else "sensors are"
@@ -230,6 +330,7 @@ def update_dashboard():
 #----------- APART OF KPI SUMMARY --------------------------------------------
     unit = temperature_unit()
     area_to_sensor = {s["area_id"]: s["id"] for s in sensors if s.get("area_id")}
+
     try:
         overview = api_get("/api/v1/areas/overview")
     except (requests.RequestException, ValueError):
@@ -271,7 +372,7 @@ def update_dashboard():
             legend = "".join(
                 f'<span class="area-map-legend-item">'
                 f'<span style="color:{v["dot"]}">●</span> {v["label"]}</span>'
-                for v in STATUS_DISPLAY.values()
+                for v in [*STATUS_DISPLAY.values(), NO_SENSOR_DISPLAY]
             )
             st.markdown(
                 '<div class="area-map-header">'
@@ -282,39 +383,55 @@ def update_dashboard():
             )
 
             with st.container(key="area_map_panel"):
-                if not area_entries:
-                    st.info("No areas configured yet.")
-                for row in chunk(area_entries, 4):
-                    cols = st.columns(1 if len(row) == 1 else 4, gap="small")
-                    for col, (zone, area) in zip(cols, row):
-                        sensor_id = area_to_sensor.get(area["id"])
-                        status = STATUS_DISPLAY[area["state"]]
-                        temperature = to_display(area["temperature"], unit)
-                        temp_text = f"{temperature:g}{unit}" if temperature is not None else "No data"
-                        tile_name = f"{zone.get('name') or 'Unassigned'} - {area.get('name') or 'Unnamed'}"
-                        selected = str(area["id"]) == str(st.session_state.get("selected_area_id"))
-                        tile_key = f"area-tile-{area['state']}-{area['id']}"
-                        if selected:
-                            tile_key += "-selected"
-                        with col:
-                            if st.button(
-                                f"{tile_name}\n\n**{temp_text}**\n\n{status['icon']}",
-                                key=tile_key, help=status["label"],
-                                disabled=sensor_id is None, use_container_width=True,
-                            ):
-                                st.session_state["selected_area_id"] = area["id"]
-                                st.session_state["trend_sensor"] = sensor_id
-                                st.rerun()
+                try:
+                    map_list = api_get("/api/v1/maps").get("maps", [])
+                except (requests.RequestException, ValueError):
+                    st.error("Unable to load the map.")
+                    map_list = []
+
+                if not map_list:
+                    st.info("No map configured yet.")
+                else:
+                    try:
+                        map_doc = api_get(f"/api/v1/maps/{map_list[0]['id']}").get("map", {})
+                    except (requests.RequestException, ValueError):
+                        st.error("Unable to load the map.")
+                        map_doc = {}
+
+                    image_path = ASSETS / map_doc["image_path"] if map_doc.get("image_path") else None
+                    if image_path is None or not image_path.exists():
+                        st.info("Map image is missing.")
+                    else:
+                        image_width, image_height = Image.open(image_path).size
+                        regions = [rotate_region(r) for r in map_doc.get("regions", [])]
+                        selected_area_id = st.session_state.get("selected_area_id")
+                        svg = render_map(
+                            regions, area_to_sensor, areas_by_id, unit, selected_area_id,
+                            image_width, image_height,
+                        )
+                        clicked = area_map(svg, key="greenhouse_map")
+                        if clicked and clicked != st.session_state.get("_last_map_click"):
+                            st.session_state["_last_map_click"] = clicked
+                            area_id = clicked["areaId"]
+                            st.session_state["selected_area_id"] = area_id
+                            st.session_state["trend_sensor"] = area_to_sensor.get(area_id)
+                            st.rerun()
 
             selected_area_id = st.session_state.get("selected_area_id")
             zone, selected_area = areas_by_id.get(selected_area_id, (None, None))
-            if selected_area:
+            if selected_area and area_to_sensor.get(selected_area_id) is None:
+                with st.container(key="area_detail"):
+                    st.markdown(
+                        "<div class='area-empty-message'>No sensor is assigned to this region yet.</div>",
+                        unsafe_allow_html=True,
+                    )
+            elif selected_area:
                 status = STATUS_DISPLAY[selected_area["state"]]
                 temperature = to_display(selected_area["temperature"], unit)
                 low = to_display(selected_area["temperature_min"], unit)
                 high = to_display(selected_area["temperature_max"], unit)
                 range_text = (
-                    f"{low:g}–{high:g}{unit}"
+                    f"{fmt(low)}–{fmt(high)}{unit}"
                     if low is not None and high is not None
                     else "Not configured"
                 )
@@ -363,16 +480,16 @@ def update_dashboard():
                     with detail_cols[1]:
                         st.caption("Temperature")
                         st.markdown(
-                            f"**{temperature:g}{unit}**"
+                            f"**{fmt(temperature)}{unit}**"
                             if temperature is not None else "**—**"
                         )
                     with detail_cols[2]:
                         st.caption("Humidity")
                         humidity = selected_area["humidity"]
-                        st.markdown(f"**{humidity:g}%**" if humidity is not None else "**—**")
+                        st.markdown(f"**{fmt(humidity)}%**" if humidity is not None else "**—**")
                     with detail_cols[3]:
                         st.caption("Battery")
-                        st.markdown(f"**{battery:g}%**" if battery is not None else "**—**")
+                        st.markdown(f"**{fmt(battery)}%**" if battery is not None else "**—**")
                     with detail_cols[4]:
                         st.caption("Required range")
                         st.markdown(f"**{range_text}**")
@@ -429,6 +546,9 @@ def update_dashboard():
             readings = api_get(f"/api/v1/sensor_data/{selected_id}").get("sensor_data", [])
         except (requests.RequestException, ValueError):
             st.error("Unable to load this sensor's readings. Please try again.")
+            return
+        if not readings:
+            st.info("This sensor has not sent any readings yet.")
             return
         frame = history_frame(readings, selected_id)
         filtered = filter_history(frame, start, end)
