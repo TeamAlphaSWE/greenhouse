@@ -6,6 +6,7 @@ from sensor_api import (
     activate_sensor,
     get_latest_sensor_data,
     get_sensor_data,
+    get_sensor_health,
     get_sensors,
     get_zones,
     readings_to_frame,
@@ -24,6 +25,60 @@ def show(value, unit):
 
 def show_limit(celsius):
     return "—" if celsius is None else f"{to_display(celsius, unit):g}"
+
+
+HEALTH_STATUS_LABELS = {"warning": "⚠ Warning", "unknown": "? Unknown"}
+
+
+def health_problems(sensor):
+    problems = []
+    if sensor.get("stale"):
+        problems.append("Stale")
+    if sensor.get("low_battery"):
+        problems.append("Low battery")
+    if not problems:
+        if sensor.get("last_seen") is None:
+            problems.append("No readings yet")
+        elif sensor.get("battery") is None:
+            problems.append("No battery data")
+    return problems
+
+
+def show_sensor_health(sensors):
+    st.subheader("Sensor health")
+    try:
+        health = get_sensor_health()
+    except requests.RequestException:
+        st.error("Could not load sensor health.")
+        return
+    pending_ids = {s["id"] for s in sensors if s.get("status") == "pending"}
+    health = [h for h in health if h["id"] not in pending_ids]
+
+    col1, col2, col3 = st.columns(3)
+    col1.metric("Healthy", sum(h["status"] == "healthy" for h in health))
+    col2.metric("Warning", sum(h["status"] == "warning" for h in health))
+    col3.metric("Unknown", sum(h["status"] == "unknown" for h in health))
+
+    affected = sorted((h for h in health if h["status"] != "healthy"),
+                      key=lambda h: h["status"] != "warning")
+    if not health:
+        st.caption("No active sensors.")
+    elif not affected:
+        st.caption("All sensors are reporting with a healthy battery.")
+    else:
+        st.dataframe(
+            pd.DataFrame([{
+                "Sensor": h["name"],
+                "Status": HEALTH_STATUS_LABELS[h["status"]],
+                "Problem": ", ".join(health_problems(h)),
+                "Battery": f"{h['battery']:g}%" if h["battery"] is not None else "—",
+                "Last reading": (
+                    f"{to_local(pd.to_datetime(h['last_seen'], utc=True)):%Y-%m-%d %H:%M %Z}"
+                    if h["last_seen"] is not None else "—"
+                ),
+            } for h in affected]),
+            hide_index=True, use_container_width=True,
+        )
 
 
 def show_activation_form(sensor_id, sensors):
@@ -148,6 +203,10 @@ for s in sensors:
             st.rerun()
     else:
         row[1].badge("Active", color="green")
+
+st.divider()
+
+show_sensor_health(sensors)
 
 st.divider()
 
