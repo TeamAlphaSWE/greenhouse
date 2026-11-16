@@ -3,13 +3,22 @@ import os
 
 import pandas as pd
 import requests
+import streamlit as st
 
 BACKEND_URL = os.environ.get("BACKEND_URL", "https://greenhouse.kentcs.org").rstrip("/")
 TIMEOUT_SECONDS = 10
 
+def _auth_headers():
+    token = st.session_state.get("token")
+    return {"Authorization": f"Bearer {token}"} if token else {}
+
 
 def _get(path):
-    response = requests.get(f"{BACKEND_URL}{path}", timeout=TIMEOUT_SECONDS)
+    response = requests.get(
+        f"{BACKEND_URL}{path}",
+        headers=_auth_headers(),
+        timeout=TIMEOUT_SECONDS,
+    )
     response.raise_for_status()
     return response.json()
 
@@ -30,7 +39,9 @@ def get_sensor_data(sensor_id):
 
 def get_latest_sensor_data(sensor_id):
     response = requests.get(
-        f"{BACKEND_URL}/api/v1/sensor_data/{sensor_id}/latest", timeout=TIMEOUT_SECONDS
+        f"{BACKEND_URL}/api/v1/sensor_data/{sensor_id}/latest",
+        headers=_auth_headers(),
+        timeout=TIMEOUT_SECONDS
     )
     if response.status_code == 404:
         return None
@@ -42,6 +53,7 @@ def activate_sensor(sensor_id, name, area_id):
     response = requests.patch(
         f"{BACKEND_URL}/api/v1/sensors/{sensor_id}",
         json={"name": name, "area_id": area_id},
+        headers=_auth_headers(),
         timeout=TIMEOUT_SECONDS,
     )
     response.raise_for_status()

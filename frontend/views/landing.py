@@ -4,6 +4,7 @@ from html import escape
 from pathlib import Path
 import os
 from zoneinfo import ZoneInfo
+from sensor_api import _auth_headers
 
 import pandas as pd
 import requests
@@ -281,7 +282,11 @@ html, body, .stApp, [data-testid="stAppViewContainer"], [data-testid="stMain"],
 
 
 def api_get(path):
-    response = requests.get(f"{BACKEND_URL}{path}", timeout=10)
+    response = requests.get(
+        f"{BACKEND_URL}{path}",
+        headers=_auth_headers(),
+        timeout=10,
+    )
     response.raise_for_status()
     return response.json()
 
