@@ -27,6 +27,24 @@
     },
     "username": {
       "type": "string"
+    },
+    "settings": {
+      "type": "object",
+      "properties": {
+        "temperature_unit": {
+          "type": "string",
+          "enum": ["°C", "°F"]
+        },
+        "alerts_enabled": {
+          "type": "boolean"
+        },
+        "email_alerts_enabled": {
+          "type": "boolean"
+        },
+        "notification_email": {
+          "type": ["string", "null"]
+        }
+      }
     }
   },
   "$defs": {
