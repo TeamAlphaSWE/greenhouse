@@ -1,0 +1,59 @@
+name: Rollback production
+
+on:
+  workflow_dispatch:
+    inputs:
+      release_id:
+        description: >
+          7-char release id to roll back to (see `ls ~/releases` on the
+          server, or a past deploy run's "Transfer the tested commit and
+          deploy" step). Leave blank to use the recorded previous release.
+        required: false
+
+permissions:
+  contents: read
+
+jobs:
+  rollback:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    concurrency:
+      group: greenhouse-production
+      cancel-in-progress: false
+    env:
+      DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+      DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+      DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure SSH
+        shell: bash
+        run: |
+          set -euo pipefail
+          : "${DEPLOY_HOST:?Missing DEPLOY_HOST secret}"
+          : "${DEPLOY_USER:?Missing DEPLOY_USER secret}"
+          : "${DEPLOY_SSH_KEY:?Missing DEPLOY_SSH_KEY secret}"
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$DEPLOY_SSH_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          ssh-keyscan -T 15 -H "$DEPLOY_HOST" >> ~/.ssh/known_hosts
+      - name: Point current at the chosen release and restart
+        shell: bash
+        env:
+          RELEASE_ID: ${{ inputs.release_id }}
+        run: |
+          set -euo pipefail
+          target="$DEPLOY_USER@$DEPLOY_HOST"
+          ssh -o BatchMode=yes "$target" "
+            set -euo pipefail
+            id='$RELEASE_ID'
+            if [ -z \"\$id\" ]; then id=\"\$(cat ~/releases/previous)\"; fi
+            [ -d ~/releases/\"\$id\" ] || { echo \"No release '\$id' under ~/releases\"; exit 1; }
+            readlink ~/app > ~/releases/rolled-back-from || true
+            ln -sfn \"\$HOME/releases/\$id\" ~/app
+            cd ~/app && bash deploy/deploy.sh
+          "
+      - name: Confirm the running version
+        run: |
+          running="$(ssh -o BatchMode=yes "$DEPLOY_USER@$DEPLOY_HOST" 'cat ~/app/VERSION')"
+          echo "Server is now running $running"

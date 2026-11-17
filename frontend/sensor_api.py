@@ -24,6 +24,10 @@ def get_zones():
 def get_alerts():
     return _get("/api/v1/alerts").get("alerts", [])
 
+def get_sensor_health():
+    return _get("/api/v1/sensors/health").get("sensors", [])
+
+
 def get_sensor_data(sensor_id):
     return _get(f"/api/v1/sensor_data/{sensor_id}").get("sensor_data", [])
 
