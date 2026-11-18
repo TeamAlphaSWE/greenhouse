@@ -56,20 +56,38 @@ jobs:
         run: |
           set -euo pipefail
           target="$DEPLOY_USER@$DEPLOY_HOST"
-          ssh -o BatchMode=yes -o ConnectTimeout=15 "$target" 'mkdir -p ~/app && python3 -' <<'PY'
+          release_id="$(git rev-parse --short=7 HEAD)"
+          full_sha="$(git rev-parse HEAD)"
+          release_dir="releases/$release_id"
+          ssh -o BatchMode=yes -o ConnectTimeout=15 "$target" "mkdir -p '$release_dir' && python3 -" <<'PY'
           import shutil
           from pathlib import Path
           assert shutil.disk_usage(Path.home()).free >= 5 * 1024 * 1024, "Server disk is full; deployment stopped before copying files"
           PY
-          # An archive of the commit avoids git-pull conflicts with the initial manual install.
+          # Extract into a fresh, versioned directory. Nothing is live until the symlink
+          # swap below, so a bad archive or a failed extraction never touches the running app.
           # .env, .git, caches and other server-only files are never in this archive.
-          git archive --format=tar HEAD | gzip -n | ssh -o BatchMode=yes "$target" 'tar -xzf - -C ~/app'
-          ssh -o BatchMode=yes "$target" 'cd ~/app && bash deploy/deploy.sh'
+          git archive --format=tar HEAD | gzip -n | ssh -o BatchMode=yes "$target" "tar -xzf - -C '$release_dir'"
+          ssh -o BatchMode=yes "$target" "
+            set -euo pipefail
+            echo '$full_sha' > '$release_dir/VERSION'
+            ln -sf ~/config/.env '$release_dir/.env'
+            ln -sf ~/config/gateway.env '$release_dir/greenhouse_gateway/.env'
+            [ -L ~/app ] && readlink ~/app > ~/releases/previous || true
+            ln -sfn \"\$HOME/$release_dir\" ~/app
+            cd ~/app && bash deploy/deploy.sh
+            ls -dt ~/releases/*/ | tail -n +6 | xargs -r rm -rf
+          "
       - name: Verify public Streamlit rendering
         run: |
           python -m pip install playwright
           python -m playwright install --with-deps chromium
           python deploy/check-public-frontend.py https://greenhouse.kentcs.org
+      - name: Confirm the running version
+        run: |
+          running="$(ssh -o BatchMode=yes "$DEPLOY_USER@$DEPLOY_HOST" 'cat ~/app/VERSION')"
+          echo "Server is running $running"
+          test "$running" = "$(git rev-parse HEAD)"
 
   tag-release:
     needs: deploy
