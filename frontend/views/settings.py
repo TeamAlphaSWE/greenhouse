@@ -1,16 +1,15 @@
 import streamlit as st
 
+from theme import page_header
 from units import CELSIUS, FAHRENHEIT, temperature_unit
 
-st.title("Settings")
+page_header("Settings", "Manage greenhouse preferences and alert settings.")
 
 
 st.set_page_config(
     page_title="Settings",
     layout="wide"
 )
-
-st.caption("Manage greenhouse preferences and alert settings.")
 
 st.divider()
 

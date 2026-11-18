@@ -107,6 +107,12 @@ def _parse_regions(raw_regions):
                 return None, None, "region text must be a non-empty string"
             entry["text"] = text.strip()
 
+        if region.get("label") is not None:
+            label = region.get("label")
+            if not isinstance(label, str) or not label.strip():
+                return None, None, "region label must be a non-empty string"
+            entry["label"] = label.strip()
+
         region_id = None
         if region.get("id") is not None:
             region_id = map_repository._to_object_id(region.get("id"))

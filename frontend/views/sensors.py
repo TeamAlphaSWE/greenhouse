@@ -6,13 +6,15 @@ from sensor_api import (
     activate_sensor,
     get_latest_sensor_data,
     get_sensor_data,
+    get_sensor_health,
     get_sensors,
     get_zones,
     readings_to_frame,
 )
-from units import temperature_unit, to_display
+from theme import page_header
+from units import temperature_unit, to_display, to_local
 
-st.title("Sensors")
+page_header("Sensors")
 
 unit = temperature_unit()
 
@@ -23,6 +25,60 @@ def show(value, unit):
 
 def show_limit(celsius):
     return "—" if celsius is None else f"{to_display(celsius, unit):g}"
+
+
+HEALTH_STATUS_LABELS = {"warning": "⚠ Warning", "unknown": "? Unknown"}
+
+
+def health_problems(sensor):
+    problems = []
+    if sensor.get("stale"):
+        problems.append("Stale")
+    if sensor.get("low_battery"):
+        problems.append("Low battery")
+    if not problems:
+        if sensor.get("last_seen") is None:
+            problems.append("No readings yet")
+        elif sensor.get("battery") is None:
+            problems.append("No battery data")
+    return problems
+
+
+def show_sensor_health(sensors):
+    st.subheader("Sensor health")
+    try:
+        health = get_sensor_health()
+    except requests.RequestException:
+        st.error("Could not load sensor health.")
+        return
+    pending_ids = {s["id"] for s in sensors if s.get("status") == "pending"}
+    health = [h for h in health if h["id"] not in pending_ids]
+
+    col1, col2, col3 = st.columns(3)
+    col1.metric("Healthy", sum(h["status"] == "healthy" for h in health))
+    col2.metric("Warning", sum(h["status"] == "warning" for h in health))
+    col3.metric("Unknown", sum(h["status"] == "unknown" for h in health))
+
+    affected = sorted((h for h in health if h["status"] != "healthy"),
+                      key=lambda h: h["status"] != "warning")
+    if not health:
+        st.caption("No active sensors.")
+    elif not affected:
+        st.caption("All sensors are reporting with a healthy battery.")
+    else:
+        st.dataframe(
+            pd.DataFrame([{
+                "Sensor": h["name"],
+                "Status": HEALTH_STATUS_LABELS[h["status"]],
+                "Problem": ", ".join(health_problems(h)),
+                "Battery": f"{h['battery']:g}%" if h["battery"] is not None else "—",
+                "Last reading": (
+                    f"{to_local(pd.to_datetime(h['last_seen'], utc=True)):%Y-%m-%d %H:%M %Z}"
+                    if h["last_seen"] is not None else "—"
+                ),
+            } for h in affected]),
+            hide_index=True, use_container_width=True,
+        )
 
 
 def show_activation_form(sensor_id, sensors):
@@ -36,8 +92,8 @@ def show_activation_form(sensor_id, sensors):
         return
 
     st.write(f"**Hardware ID:** {sensor['hardware_id']}")
-    discovered = pd.to_datetime(sensor.get("created_at"), errors="coerce")
-    st.write(f"**Discovered:** {discovered:%Y-%m-%d %H:%M UTC}" if pd.notna(discovered) else "**Discovered:** unknown")
+    discovered = pd.to_datetime(sensor.get("created_at"), utc=True, errors="coerce")
+    st.write(f"**Discovered:** {to_local(discovered):%Y-%m-%d %H:%M %Z}" if pd.notna(discovered) else "**Discovered:** unknown")
 
     try:
         latest = get_latest_sensor_data(sensor_id)
@@ -51,9 +107,9 @@ def show_activation_form(sensor_id, sensors):
         col1.metric("Temperature", show(to_display(values.get("temperature"), unit), f" {unit}"))
         col2.metric("Humidity", f"{values['humidity']:g} %" if "humidity" in values else "—")
         col3.metric("Battery", f"{values['battery']:g} %" if "battery" in values else "—")
-        reading_time = pd.to_datetime(latest.get("timestamp"), errors="coerce")
+        reading_time = pd.to_datetime(latest.get("timestamp"), utc=True, errors="coerce")
         if pd.notna(reading_time):
-            st.caption(f"Reading from {reading_time:%Y-%m-%d %H:%M UTC}")
+            st.caption(f"Reading from {to_local(reading_time):%Y-%m-%d %H:%M %Z}")
     else:
         st.caption("No readings from this sensor yet.")
 
@@ -150,6 +206,10 @@ for s in sensors:
 
 st.divider()
 
+show_sensor_health(sensors)
+
+st.divider()
+
 sensor_names = {s["id"]: s.get("name") or s["hardware_id"] for s in sensors}
 sensor_id = st.selectbox(
     "Sensor",
@@ -174,7 +234,7 @@ col1.metric("Temperature", show(None if latest is None else to_display(latest["t
 col2.metric("Humidity", show(None if latest is None else latest["humidity"], " %"))
 col3.metric("Battery", show(None if latest is None else latest["battery"], " %"))
 
-last_seen = "never" if latest is None else latest["Date"].strftime("%Y-%m-%d %H:%M UTC")
+last_seen = "never" if latest is None else to_local(latest["Date"]).strftime("%Y-%m-%d %H:%M %Z")
 st.write(f"**Zone:** {zone_names.get(sensor.get('zone_id'), 'Unassigned')}")
 st.write(f"**Status:** {sensor.get('status', 'unknown')}")
 st.write(f"**Hardware ID:** {sensor.get('hardware_id', '—')}")

@@ -1,3 +1,5 @@
+from unittest.mock import patch
+
 import pandas as pd
 
 from charts import time_series_chart
@@ -11,13 +13,22 @@ def _frame():
     })
 
 
-def test_tooltip_shows_date_and_time_utc():
+def test_tooltip_shows_date_and_time_in_viewer_timezone():
     spec = time_series_chart(_frame(), ["Temperature", "Humidity"]).to_dict()
 
     tooltip = [t["field"] for t in spec["layer"][1]["encoding"]["tooltip"]]
-    assert tooltip == ["Time (UTC)", "Reading", "Value"]
+    assert tooltip == ["Time", "Reading", "Value"]
     rows = list(spec["datasets"].values())[0]
-    assert sorted({r["Time (UTC)"] for r in rows}) == ["2026-11-05 19:42 UTC", "2026-11-06 01:42 UTC"]
+    # No browser context in a plain unit test, so viewer_timezone() falls back to UTC.
+    assert sorted({r["Time"] for r in rows}) == ["2026-11-05 19:42", "2026-11-06 01:42"]
+
+
+def test_tooltip_converts_to_viewer_timezone():
+    with patch("charts.viewer_timezone", return_value="America/New_York"):
+        spec = time_series_chart(_frame(), ["Temperature"]).to_dict()
+
+    rows = list(spec["datasets"].values())[0]
+    assert sorted({r["Time"] for r in rows}) == ["2026-11-05 14:42", "2026-11-05 20:42"]
 
 
 def test_missing_values_are_skipped():

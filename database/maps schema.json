@@ -36,6 +36,9 @@
           "text": {
             "type": "string"
           },
+          "label": {
+            "type": "string"
+          },
           "x": {
             "type": "number"
           },

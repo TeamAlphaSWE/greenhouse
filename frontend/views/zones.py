@@ -1,9 +1,11 @@
 import pandas as pd
 import streamlit as st
 from sensor_api import get_sensors, get_zones, get_sensor_data, readings_to_frame
+from theme import page_header
 from units import temperature_unit, to_display
 
-st.title("Zones")
+page_header("Zones")
+
 @st.fragment(run_every = "10s") # refresh page once every 10 seconds
 def update_dashboard():
     def show(value, unit):
