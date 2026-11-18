@@ -5,3 +5,5 @@ pytest
 mongomock
 itsdangerous
 werkzeug
+langchain-core
+langchain-openai
