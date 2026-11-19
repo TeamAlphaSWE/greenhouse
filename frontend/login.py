@@ -1,6 +1,7 @@
 from pathlib import Path
 import base64
 import streamlit as st
+import requests
 
 st.set_page_config(
     page_title="Greenhouse Dashboard Login",
@@ -305,11 +306,30 @@ with right:
     username=username.lower()
 
     if st.button("Sign In →"):
-                    
-        if username == "admin" and password == "1234":
-            st.session_state["logged_in"] = True
-            st.session_state["username"] = username
-            st.rerun()
-
+        if not username or not password:
+            st.error("Please enter your username and password")
         else:
-            st.error("Invalid email or password.") 
+            try: 
+                response = requests.post(
+                    "https://greenhouse.kentcs.org/api/v1/login",
+                    json={
+                        "username":username,
+                        "password":password
+                    },
+                    timeout=10
+                )
+                if response.status_code ==200:
+                    result = response.json()
+                    st.session_state["logged_in"] = True
+                    st.session_state["username"] = username
+                    st.session_state["token"] = result["token"]
+                    st.rerun()
+
+                elif response.status_code == 401:
+                    st.error("Invalid username or password.")
+
+                else:
+                    st.error("Login failed. Please try again.")
+
+            except requests.exceptions.RequestException:
+                st.error("Could not connect to the login sever.")
