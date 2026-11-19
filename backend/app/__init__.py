@@ -3,6 +3,7 @@ from flask import Flask
 from app.config import Config
 from app.db import init_db
 from app.json import MongoJSONProvider
+from app.services.email_service import EmailService
 
 
 def create_app(config=None):
@@ -11,6 +12,16 @@ def create_app(config=None):
     app.config.from_object(Config)
     if config:
         app.config.from_mapping(config)
+
+    email_settings = [
+        app.config.get("SMTP_HOST"),
+        app.config.get("SMTP_USER"),
+        app.config.get("SMTP_PASSWORD"),
+    ]
+    if all(email_settings):
+        app.extensions["email_service"] = EmailService(app.config)
+    else:
+        app.extensions["email_service"] = None
 
     init_db(app)
 

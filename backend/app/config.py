@@ -20,3 +20,9 @@ class Config:
     SENSOR_REPORT_INTERVAL_MINUTES = int(os.environ.get("SENSOR_REPORT_INTERVAL_MINUTES", "120"))
     SENSOR_STALE_FACTOR = float(os.environ.get("SENSOR_STALE_FACTOR", "2"))
     LOW_BATTERY_PERCENT = int(os.environ.get("LOW_BATTERY_PERCENT", "20"))
+
+    # Email (SMTP)
+    SMTP_HOST = os.environ.get("SMTP_HOST")
+    SMTP_PORT = int(os.environ.get("SMTP_PORT", "587"))
+    SMTP_USER = os.environ.get("SMTP_USER")
+    SMTP_PASSWORD = os.environ.get("SMTP_PASSWORD")
