@@ -5,9 +5,17 @@ from datetime import datetime, time, timedelta, timezone
 
 st.title("Report")
 RANGES = {"24 hours": 1, "7 days": 7, "30 days": 30}
-@st.fragment(run_every = "10s") # refresh page once every 10 seconds
+zones = get_zones()
+sensors = get_sensors()
+
+@st.fragment
+def print_report():
+    st.write("Testing...")
+    if st.button("Make new Report?"):
+        st.rerun() # refresh page w/o user having to leave page
+
 def update_dashboard():
-    st.subheader("Greenhouse Report")
+    st.subheader("Get more detailed insight to the Greenhouse info")
     period = st.selectbox("Please select time range to report", [*RANGES, "All history", "Custom"],
         index=1, key="trend_range")
     now = datetime.now(timezone.utc)
@@ -28,5 +36,31 @@ def update_dashboard():
             return
         start = datetime.combine(first, time.min, tzinfo=timezone.utc)
         end = datetime.combine(last + timedelta(days=1), time.min, tzinfo=timezone.utc)
-    
+
+    filter_options = st.selectbox(
+        "Filter with Zone or Sensor?",
+        options = ["Zones", "Sensors"]
+    )
+
+    if filter_options == "Zones":
+        zone_options = {"All": "All", **{z["id"]: z.get("name") or z["status"] for z in zones}}
+        zone_id = st.selectbox(
+            "Choose a zone or select all to see all zones.",
+            options = list(zone_options),
+            format_func = lambda name: zone_options[name],
+        )
+        zone = None if zone_id == "All" else next(z for z in zones if z["id"] == zone_id)
+
+    else:
+        sensor_options = {"All": "All", **{s["id"]: s.get("name") or s["hardware_id"] for s in sensors}}
+        sensor_id = st.selectbox(
+            "Choose a sensor or select all to see all sensors.",
+            options = list(sensor_options),
+            format_func = lambda sid: sensor_options[sid],
+        )
+        sensor = None if sensor_id == "All" else next(s for s in sensors if s["id"] == sensor_id)
+
+    # ---------------------- ADD BUTTON THAT GENERATES REPORT --------------------------
+    if st.button("Generate Report"):
+        print_report()
 update_dashboard()
