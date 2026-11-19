@@ -239,6 +239,24 @@ try:
                 },
                 "updated_at": {
                     "bsonType": "date"
+                },
+                "settings": {
+                    "bsonType": "object",
+                    "properties": {
+                        "temperature_unit": {
+                            "bsonType": "string",
+                            "enum": ["°C", "°F"]
+                        },
+                        "alerts_enabled": {
+                            "bsonType": "bool"
+                        },
+                        "email_alerts_enabled": {
+                            "bsonType": "bool"
+                        },
+                        "notification_email": {
+                            "bsonType": ["string", "null"]
+                        }
+                    }
                 }
             }
         }

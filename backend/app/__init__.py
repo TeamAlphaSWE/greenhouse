@@ -49,4 +49,7 @@ def create_app(config=None):
     from app.routes.maps import maps
     app.register_blueprint(maps)
 
+    from app.routes.settings import settings
+    app.register_blueprint(settings)
+
     return app
