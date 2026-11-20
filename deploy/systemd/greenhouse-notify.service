@@ -5,4 +5,4 @@ Description=Greenhouse email alert notifications
 Type=oneshot
 WorkingDirectory=%h/app/backend
 EnvironmentFile=%h/app/.env
-ExecStart=/usr/bin/python3 scripts/notify_alerts.py
+ExecStart=/usr/bin/python3 -m scripts.notify_alerts
