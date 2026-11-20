@@ -8,6 +8,12 @@ from sensor_api import get_alerts, get_zones
 from theme import page_header
 from units import to_local
 
+st.set_page_config(
+    page_title="Alerts | Greenhouse",
+    page_icon="🌱",
+    layout="wide"
+)
+
 page_header("Greenhouse Alerts", "View temperature and humidity alerts for greenhouse zones.")
 
 st.divider()

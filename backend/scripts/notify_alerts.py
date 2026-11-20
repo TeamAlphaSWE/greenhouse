@@ -23,6 +23,7 @@ def run(app):
     with app.app_context():
         pending_alerts = alert_repository.find({"notified": {"$ne": True}})
         if not pending_alerts:
+            logger.info("No pending alerts; nothing to notify")
             return
 
         email_service = app.extensions.get("email_service")
@@ -34,15 +35,26 @@ def run(app):
         body = _format_summary(pending_alerts)
 
         recipients = user_repository.find({"settings.email_alerts_enabled": True})
+        sent = 0
+        failed = 0
         for recipient in recipients:
             to = recipient.get("settings", {}).get("notification_email")
             if not to:
                 continue
-            email_service.send(to, subject, body)
+            if email_service.send(to, subject, body):
+                sent += 1
+            else:
+                failed += 1
+
+        logger.info(
+            "Notified %d recipient(s) (%d failed) about %d pending alert(s)",
+            sent, failed, len(pending_alerts),
+        )
 
         for alert in pending_alerts:
             alert_repository.update(alert["id"], {"notified": True})
 
 
 if __name__ == "__main__":
+    logging.basicConfig(level=logging.INFO)
     run(create_app())
