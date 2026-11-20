@@ -1,9 +1,14 @@
 from flask import Flask
+from dotenv import load_dotenv
+
+load_dotenv()
 
 from app.config import Config
 from app.db import init_db
 from app.json import MongoJSONProvider
 from app.services.email_service import EmailService
+
+from app.services.ai_service import AIService
 
 
 def create_app(config=None):
@@ -13,6 +18,17 @@ def create_app(config=None):
     if config:
         app.config.from_mapping(config)
 
+    ai_settings = [
+        app.config.get("AI_BASE_URL"),
+        app.config.get("AI_API_KEY"),
+        app.config.get("AI_MODEL"),
+    ]
+
+    if all(ai_settings):
+        app.extensions["ai_service"] = AIService(app.config)
+    else:
+        app.extensions["ai_service"] = None
+        
     email_settings = [
         app.config.get("SMTP_HOST"),
         app.config.get("SMTP_USER"),

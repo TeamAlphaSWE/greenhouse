@@ -26,3 +26,17 @@ class Config:
     SMTP_PORT = int(os.environ.get("SMTP_PORT", "587"))
     SMTP_USER = os.environ.get("SMTP_USER")
     SMTP_PASSWORD = os.environ.get("SMTP_PASSWORD")
+
+        # AI/LangChain configuration
+    AI_BASE_URL = os.environ.get("AI_BASE_URL")
+    AI_API_KEY = os.environ.get("AI_API_KEY")
+    AI_MODEL = os.environ.get("AI_MODEL")
+    AI_TEMPERATURE = float(
+        os.environ.get("AI_TEMPERATURE", "0.7")
+    )
+    AI_MAX_TOKENS = int(
+        os.environ.get("AI_MAX_TOKENS", "2048")
+    )
+    AI_TIMEOUT = int(
+        os.environ.get("AI_TIMEOUT", "30")
+    )
