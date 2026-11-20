@@ -18,7 +18,6 @@ def create_app(config=None):
     if config:
         app.config.from_mapping(config)
 
-<<<<<<< HEAD
     ai_settings = [
         app.config.get("AI_BASE_URL"),
         app.config.get("AI_API_KEY"),
@@ -29,7 +28,7 @@ def create_app(config=None):
         app.extensions["ai_service"] = AIService(app.config)
     else:
         app.extensions["ai_service"] = None
-=======
+        
     email_settings = [
         app.config.get("SMTP_HOST"),
         app.config.get("SMTP_USER"),
@@ -39,7 +38,6 @@ def create_app(config=None):
         app.extensions["email_service"] = EmailService(app.config)
     else:
         app.extensions["email_service"] = None
->>>>>>> dev
 
     init_db(app)
 
@@ -67,12 +65,7 @@ def create_app(config=None):
     from app.routes.maps import maps
     app.register_blueprint(maps)
 
-<<<<<<< HEAD
-    from app.routes.ai import ai
-    app.register_blueprint(ai)
-=======
     from app.routes.settings import settings
     app.register_blueprint(settings)
->>>>>>> dev
 
     return app

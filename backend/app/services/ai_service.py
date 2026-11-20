@@ -3,12 +3,32 @@ from openai import APIConnectionError, APIStatusError, APITimeoutError
 import base64
 from langchain_core.messages import HumanMessage
 
+ALLOWED_IMAGE_MIMES = {
+    "image/jpeg",
+    "image/png",
+    "image/webp",
+}
+MAX_IMAGE_SIZE = 4 * 1024 * 1024  # 4 MB
+
 def build_image_message(prompt: str, image_bytes: bytes, mime_type: str = "image/jpeg") -> HumanMessage:
     encoded = base64.b64encode(image_bytes).decode("utf-8")
     return HumanMessage(content=[
         {"type": "text", "text": prompt},
         {"type": "image_url", "image_url": {"url": f"data:{mime_type};base64,{encoded}"}},
     ])
+
+def image_from_request_files(files, field="image"):
+    image = files.get(field)
+    if not image:
+        return None, None
+    if image.mimetype not in ALLOWED_IMAGE_MIMES:
+        raise ValueError("Unsupported image type")
+    image_bytes = image.stream.read(MAX_IMAGE_SIZE + 1)
+    if len(image_bytes) > MAX_IMAGE_SIZE:
+        raise ValueError("Image exceeds the 4 MB size limit")
+    if not image_bytes:
+        raise ValueError("Uploaded image is empty")
+    return image_bytes, image.mimetype
 
 class AIService:
 
