@@ -296,6 +296,9 @@ try:
                 },
                 "created_at": {
                     "bsonType": "date"
+                },
+                "notified": {
+                    "bsonType": "bool"
                 }
             }
         }
