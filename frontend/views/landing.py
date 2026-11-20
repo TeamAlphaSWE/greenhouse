@@ -15,6 +15,12 @@ from components.area_map import area_map
 from theme import inject_sidebar
 from units import fmt, temperature_unit, to_display, to_local, viewer_timezone
 
+st.set_page_config(
+    page_title="Home | Greenhouse",
+    page_icon="🌱",
+    layout="wide"
+)
+
 BACKEND_URL = os.environ.get("BACKEND_URL", "https://greenhouse.kentcs.org").rstrip("/")
 ASSETS = Path(__file__).resolve().parent.parent / "assets"
 RANGES = {"24 hours": 1, "7 days": 7, "30 days": 30}
