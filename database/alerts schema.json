@@ -42,6 +42,9 @@
     },
     "created_at": {
       "$ref": "#/$defs/Date"
+    },
+    "notified": {
+      "type": "boolean"
     }
   },
   "$defs": {
