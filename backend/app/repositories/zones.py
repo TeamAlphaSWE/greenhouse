@@ -1,6 +1,9 @@
 from __future__ import annotations
 
+from datetime import datetime, timezone
+
 from bson import ObjectId
+from pymongo import ReturnDocument
 
 from app.repository import Repository
 
@@ -22,6 +25,20 @@ class ZoneRepository(Repository):
             {"areas.id": area_id},
             {"$unset": {"areas.$.region_id": ""}},
         )
+
+
+    def set_target_conditions(self, area_id: ObjectId, conditions: dict) -> dict | None:
+        changes = {
+            f"areas.$.target_conditions.{measurement}": limits
+            for measurement, limits in conditions.items()
+        }
+        changes["updated_at"] = datetime.now(timezone.utc)
+        doc = self.collection.find_one_and_update(
+            {"areas.id": area_id},
+            {"$set": changes},
+            return_document=ReturnDocument.AFTER,
+        )
+        return self._to_entity(doc)
 
 
 zones = ZoneRepository()
