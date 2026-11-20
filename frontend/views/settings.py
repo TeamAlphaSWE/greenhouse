@@ -7,7 +7,8 @@ page_header("Settings", "Manage greenhouse preferences and alert settings.")
 
 
 st.set_page_config(
-    page_title="Settings",
+    page_title="Settings | Greenhouse",
+    page_icon="🌱",
     layout="wide"
 )
 

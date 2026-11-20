@@ -14,6 +14,12 @@ from sensor_api import (
 from theme import page_header
 from units import temperature_unit, to_display, to_local
 
+st.set_page_config(
+    page_title="Sensors | Greenhouse",
+    page_icon="🌱",
+    layout="wide"
+)
+
 page_header("Sensors")
 
 unit = temperature_unit()
