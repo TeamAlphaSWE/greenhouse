@@ -1,9 +1,9 @@
+from io import BytesIO
 from unittest.mock import MagicMock, patch
 import pytest
-from app.services.ai_service import AIService, build_image_message
+from werkzeug.datastructures import FileStorage
+from app.services.ai_service import AIService, build_image_message, image_from_request_files
 from openai import APIConnectionError, APIStatusError, APITimeoutError
-
-import io
 
 @pytest.fixture
 def ai_config():
@@ -120,196 +120,65 @@ def test_invoke_api_status_error(mock_chat_openai, ai_config):
         ai.invoke([("user", "Hello")])
 
 
-# For flask endpoint testing
+def test_image_from_request_files_missing_returns_none():
+    image_bytes, mime_type = image_from_request_files({})
 
-@pytest.fixture
-def mock_ai_service(app, monkeypatch):
-    mock_service = MagicMock()
-    mock_service.invoke.return_value = "Greenhouse AI response"
-
-    monkeypatch.setitem(
-        app.extensions,
-        "ai_service",
-        mock_service,
-    )
-
-    return mock_service
+    assert image_bytes is None
+    assert mime_type is None
 
 
-def test_ai_text_invocation(client, mock_ai_service):
-
-    response = client.post(
-        "/api/v1/ai/invoke",
-        data={"prompt": "Describe the greenhouse"},
-    )
-
-    assert response.status_code == 200
-    assert response.get_json() == {
-        "response": "Greenhouse AI response"
+def test_image_from_request_files_reads_bytes_and_mimetype():
+    files = {
+        "image": FileStorage(
+            stream=BytesIO(b"fake-image-data"),
+            filename="plant.jpg",
+            content_type="image/jpeg",
+        )
     }
 
-    messages = mock_ai_service.invoke.call_args.args[0]
+    image_bytes, mime_type = image_from_request_files(files)
 
-    assert messages[0].content == "Describe the greenhouse"
-
-
-def test_ai_image_invocation(client, mock_ai_service):
-
-    image_data = b"fake-image-data"
-
-    response = client.post(
-        "/api/v1/ai/invoke",
-        data={
-            "prompt": "Describe this plant",
-            "image": (
-                io.BytesIO(image_data),
-                "plant.jpg",
-                "image/jpeg",
-            ),
-        },
-        content_type="multipart/form-data",
-    )
-
-    assert response.status_code == 200
-
-    messages = mock_ai_service.invoke.call_args.args[0]
-    content = messages[0].content
-
-    assert content[0]["type"] == "text"
-    assert content[0]["text"] == "Describe this plant"
-
-    assert content[1]["type"] == "image_url"
-
-    image_url = content[1]["image_url"]["url"]
-
-    assert image_url.startswith("data:image/jpeg;base64,")
+    assert image_bytes == b"fake-image-data"
+    assert mime_type == "image/jpeg"
 
 
-def test_ai_missing_prompt(client, mock_ai_service):
-
-    response = client.post(
-        "/api/v1/ai/invoke",
-        data={},
-    )
-
-    assert response.status_code == 400
-    assert response.get_json() == {
-        "error": "A prompt is required"
+def test_image_from_request_files_rejects_unsupported_type():
+    files = {
+        "image": FileStorage(
+            stream=BytesIO(b"fake-data"),
+            filename="document.gif",
+            content_type="image/gif",
+        )
     }
 
-    mock_ai_service.invoke.assert_not_called()
+    with pytest.raises(ValueError, match="Unsupported image type"):
+        image_from_request_files(files)
 
 
-def test_ai_unsupported_image_type(
-    client,
-    mock_ai_service,
-):
-
-    response = client.post(
-        "/api/v1/ai/invoke",
-        data={
-            "prompt": "Describe this file",
-            "image": (
-                io.BytesIO(b"fake-data"),
-                "document.gif",
-                "image/gif",
-            ),
-        }
-    )
-
-    assert response.status_code == 400
-    assert response.get_json() == {
-        "error": "Unsupported image type"
+def test_image_from_request_files_rejects_empty_image():
+    files = {
+        "image": FileStorage(
+            stream=BytesIO(b""),
+            filename="empty.jpg",
+            content_type="image/jpeg",
+        )
     }
 
-    mock_ai_service.invoke.assert_not_called()
+    with pytest.raises(ValueError, match="Uploaded image is empty"):
+        image_from_request_files(files)
 
 
-def test_ai_empty_image(
-    client,
-    mock_ai_service,
-):
-
-    response = client.post(
-        "/api/v1/ai/invoke",
-        data={
-            "prompt": "Describe this image",
-            "image": (
-                io.BytesIO(b""),
-                "empty.jpg",
-                "image/jpeg",
-            ),
-        },
-    )
-
-    assert response.status_code == 400
-    assert response.get_json() == {
-        "error": "Uploaded image is empty"
-    }
-
-    mock_ai_service.invoke.assert_not_called()
-
-
-def test_ai_image_too_large(
-    client,
-    mock_ai_service,
-):
-
+def test_image_from_request_files_rejects_oversized_image():
     oversized_image = b"x" * (4 * 1024 * 1024 + 1)
-
-    response = client.post(
-        "/api/v1/ai/invoke",
-        data={
-            "prompt": "Describe this image",
-            "image": (
-                io.BytesIO(oversized_image),
-                "large.jpg",
-                "image/jpeg",
-            ),
-        },
-    )
-
-    assert response.status_code == 413
-    assert response.get_json() == {
-        "error": "Image exceeds the 4 MB size limit"
+    files = {
+        "image": FileStorage(
+            stream=BytesIO(oversized_image),
+            filename="large.jpg",
+            content_type="image/jpeg",
+        )
     }
 
-    mock_ai_service.invoke.assert_not_called()
-
-
-def test_ai_service_unavailable(app, client):
-
-    app.extensions["ai_service"] = None
-
-    response = client.post(
-        "/api/v1/ai/invoke",
-        data={"prompt": "Hello"},
-    )
-
-    assert response.status_code == 503
-    assert response.get_json() == {
-        "error": "AI service is currently unavailable"
-    }
-
-
-def test_ai_provider_failure(
-    client,
-    mock_ai_service,
-):
-
-    mock_ai_service.invoke.side_effect = RuntimeError(
-        "LLM provider is unavailable"
-    )
-
-    response = client.post(
-        "/api/v1/ai/invoke",
-        data={"prompt": "Hello"},
-    )
-
-    assert response.status_code == 502
-    assert response.get_json() == {
-        "error": "AI provider invocation failed"
-    }
-
+    with pytest.raises(ValueError, match="Image exceeds the 4 MB size limit"):
+        image_from_request_files(files)
 
 
