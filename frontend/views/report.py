@@ -1,8 +1,10 @@
 import pandas as pd
 import streamlit as st
-from sensor_api import get_sensors, get_zones, print_report
+from sensor_api import get_sensors, get_zones
+from reports_api import print_report
 from datetime import datetime, time, timedelta, timezone
 
+#---------------NOT FINISHED-------------#
 st.title("Report")
 RANGES = {"24 hours": 1, "7 days": 7, "30 days": 30}
 zones = get_zones()
@@ -37,6 +39,8 @@ def update_dashboard():
         options = ["Zones", "Sensors"]
     )
 
+    zone = None
+    sensor = None
     if filter_options == "Zones":
         zone_options = {"All": "All", **{z["id"]: z.get("name") or z["status"] for z in zones}}
         zone_id = st.selectbox(
@@ -61,7 +65,7 @@ def update_dashboard():
             try:
                 report_data = print_report(start=start, end=end, zone=zone, sensor=sensor)
                 st.success("Your report has been generated!")
-                st.write("Reporting Period: {period} ({start} to {end})")
+                st.json(report_data)
             except:
                 st.error("There was an issue generating your requested report...")
 update_dashboard()
