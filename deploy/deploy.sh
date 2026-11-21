@@ -10,13 +10,14 @@ flock -n 9 || { echo 'Another deployment is running'; exit 1; }
 mkdir -p "$HOME/.config/systemd/user" "$HOME/app/proxy/run"
 # Validate before restarting the services.
 /usr/sbin/nginx -t -c "$HOME/app/proxy/proxy.conf"
-cp deploy/systemd/*.service "$HOME/.config/systemd/user/"
+cp deploy/systemd/*.service deploy/systemd/*.timer "$HOME/.config/systemd/user/"
 systemctl --user daemon-reload
-systemctl --user enable greenhouse-backend greenhouse-frontend greenhouse-proxy greenhouse-gateway greenhouse-broker
+systemctl --user enable greenhouse-backend greenhouse-frontend greenhouse-proxy greenhouse-gateway greenhouse-broker greenhouse-notify.timer
 systemctl --user restart greenhouse-backend greenhouse-frontend greenhouse-proxy greenhouse-broker greenhouse-gateway
+systemctl --user restart greenhouse-notify.timer
 failed() {
-    systemctl --user --no-pager --full status greenhouse-backend greenhouse-frontend greenhouse-proxy greenhouse-broker greenhouse-gateway || true
-    journalctl --user -u greenhouse-frontend -u greenhouse-backend -u greenhouse-proxy -u greenhouse-broker -u greenhouse-gateway -n 60 --no-pager || true
+    systemctl --user --no-pager --full status greenhouse-backend greenhouse-frontend greenhouse-proxy greenhouse-broker greenhouse-gateway greenhouse-notify.timer || true
+    journalctl --user -u greenhouse-frontend -u greenhouse-backend -u greenhouse-proxy -u greenhouse-broker -u greenhouse-gateway -u greenhouse-notify -n 60 --no-pager || true
 }
 trap failed ERR
 for attempt in {1..30}; do

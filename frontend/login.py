@@ -4,6 +4,7 @@ import streamlit as st
 
 st.set_page_config(
     page_title="Greenhouse Dashboard Login",
+    page_icon="🌱",
     layout="wide"
 )
 
