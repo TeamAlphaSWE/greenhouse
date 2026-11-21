@@ -1,6 +1,6 @@
 import pandas as pd
 import streamlit as st
-from sensor_api import get_sensors, get_zones, get_sensor_data, readings_to_frame
+from sensor_api import get_sensors, get_zones, print_report
 from datetime import datetime, time, timedelta, timezone
 
 st.title("Report")
@@ -8,14 +8,9 @@ RANGES = {"24 hours": 1, "7 days": 7, "30 days": 30}
 zones = get_zones()
 sensors = get_sensors()
 
-@st.fragment
-def print_report():
-    st.write("Testing...")
-    if st.button("Make new Report?"):
-        st.rerun() # refresh page w/o user having to leave page
-
 def update_dashboard():
     st.subheader("Get more detailed insight to the Greenhouse info")
+    
     period = st.selectbox("Please select time range to report", [*RANGES, "All history", "Custom"],
         index=1, key="trend_range")
     now = datetime.now(timezone.utc)
@@ -62,5 +57,11 @@ def update_dashboard():
 
     # ---------------------- ADD BUTTON THAT GENERATES REPORT --------------------------
     if st.button("Generate Report"):
-        print_report()
+        with st.spinner("Generating your report, please wait..."):
+            try:
+                report_data = print_report(start=start, end=end, zone=zone, sensor=sensor)
+                st.success("Your report has been generated!")
+                st.write("Reporting Period: {period} ({start} to {end})")
+            except:
+                st.error("There was an issue generating your requested report...")
 update_dashboard()
