@@ -20,6 +20,6 @@ def print_report(start = None, end = None, zone = None, sensor = None):
     if sensor:
         data['sensor'] = sensor
 
-    response = requests.get(f"{BACKEND_URL}/report", params = data, timeout = TIMEOUT_SECONDS)
+    response = requests.post(f"{BACKEND_URL}/report", json = data, timeout = TIMEOUT_SECONDS)
     response.raise_for_status()
     return response.json()
