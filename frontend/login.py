@@ -1,12 +1,13 @@
 from pathlib import Path
 import base64
-import streamlit as st
 import requests
+import streamlit as st
 
-from sensor_api import BACKEND_URL, TIMEOUT_SECONDS
+from api_client import BACKEND_URL, TIMEOUT_SECONDS
 
 st.set_page_config(
     page_title="Greenhouse Dashboard Login",
+    page_icon="🌱",
     layout="wide"
 )
 
@@ -191,14 +192,14 @@ st.markdown(
         font-size: 16px;
     }}
 
-    .stButton,
-    [data-testid="stButton"] {{
+    .stFormSubmitButton,
+    [data-testid="stFormSubmitButton"] {{
         width: 50% !important;
         display: flex !important;
         justify-content: center !important;
     }}
 
-    .stButton > button {{
+    .stFormSubmitButton > button {{
         width: 320px !important;
         height: 56px !important;
         margin: 0 auto !important;
@@ -211,7 +212,7 @@ st.markdown(
         font-weight: 600 !important;
     }}
 
-    .stButton > button:hover {{
+    .stFormSubmitButton > button:hover {{
         background: #1f472d;
         color: white;
     }}
@@ -292,44 +293,41 @@ with right:
         unsafe_allow_html=True
     )
 
-    username = st.text_input(
-        "Email",
-        placeholder="ID",
-        label_visibility="collapsed"
-    )
+    with st.form("login_form", border=False):
+        username = st.text_input(
+            "Email",
+            placeholder="ID",
+            label_visibility="collapsed"
+        )
 
-    password = st.text_input(
-        "Password",
-        type="password",
-        placeholder="Password",
-        label_visibility="collapsed"
-    )
+        password = st.text_input(
+            "Password",
+            type="password",
+            placeholder="Password",
+            label_visibility="collapsed"
+        )
+
+        submitted = st.form_submit_button("Sign In →")
 
     username = username.lower()
 
-    if st.button("Sign In →"):
+    if submitted:
         try:
             response = requests.post(
                 f"{BACKEND_URL}/api/v1/login",
                 json={"username": username, "password": password},
                 timeout=TIMEOUT_SECONDS,
             )
-
-            if response.status_code == 200:
-                token = response.json().get("token")
-
-                if token:
-                    st.session_state["token"] = token
-                    st.session_state["logged_in"] = True
-                    st.session_state["username"] = username
-                    st.rerun()
-                else:
-                    st.error("Login failed. Please try again.")
-
+            token = response.json().get("token") if response.status_code == 200 else None
+        except (requests.RequestException, ValueError):
+            st.error("Unable to connect to the server.")
+        else:
+            if token:
+                st.session_state["token"] = token
+                st.session_state["logged_in"] = True
+                st.session_state["username"] = username
+                st.rerun()
             elif response.status_code == 401:
                 st.error("Invalid email or password.")
             else:
                 st.error("Login failed. Please try again.")
-
-        except requests.RequestException:
-            st.error("Unable to connect to the server.")

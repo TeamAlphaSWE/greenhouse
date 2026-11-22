@@ -4,6 +4,12 @@ from sensor_api import get_sensors, get_zones, get_sensor_data, readings_to_fram
 from theme import page_header
 from units import temperature_unit, to_display
 
+st.set_page_config(
+    page_title="Zones | Greenhouse",
+    page_icon="🌱",
+    layout="wide"
+)
+
 page_header("Zones")
 
 @st.fragment(run_every = "10s") # refresh page once every 10 seconds

@@ -7,7 +7,8 @@ page_header("Settings", "Manage greenhouse preferences and alert settings.")
 
 
 st.set_page_config(
-    page_title="Settings",
+    page_title="Settings | Greenhouse",
+    page_icon="🌱",
     layout="wide"
 )
 
@@ -34,13 +35,13 @@ col1, col2 = st.columns(2)
 with col1:
     st.number_input(
         f"Minimum Temperature ({selected_unit})",
-        value=18.0
+        value=18
     )
 
 with col2:
     st.number_input(
         f"Maximum Temperature ({selected_unit})",
-        value=28.0
+        value=28
     )
 
 st.divider()

@@ -20,6 +20,17 @@ def sensor_health(sensor, latest, config, now=None):
         if value.get("type") == "battery":
             battery = value.get("value")
 
+    stale_after = config["SENSOR_REPORT_INTERVAL_MINUTES"] * config["SENSOR_STALE_FACTOR"]
+    stale = minutes_ago is not None and minutes_ago > stale_after
+    low_battery = battery is not None and battery < config["LOW_BATTERY_PERCENT"]
+
+    if stale or low_battery:
+        status = "warning"
+    elif last_seen is None or battery is None:
+        status = "unknown"
+    else:
+        status = "healthy"
+
     return {
         "id": sensor["id"],
         "name": sensor.get("name") or sensor.get("hardware_id"),
@@ -30,7 +41,9 @@ def sensor_health(sensor, latest, config, now=None):
         "last_seen": last_seen,
         "minutes_since_last_seen": minutes_ago,
         "battery": battery,
-        "low_battery": battery is not None and battery < config["LOW_BATTERY_PERCENT"],
+        "low_battery": low_battery,
+        "stale": stale,
+        "status": status,
     }
 
 
@@ -40,4 +53,8 @@ def summarize(health):
         "reporting": sum(h["state"] == "reporting" for h in health),
         "no_data": sum(h["state"] == "no_data" for h in health),
         "low_battery": sum(h["low_battery"] for h in health),
+        "stale": sum(h["stale"] for h in health),
+        "healthy": sum(h["status"] == "healthy" for h in health),
+        "warning": sum(h["status"] == "warning" for h in health),
+        "unknown": sum(h["status"] == "unknown" for h in health),
     }

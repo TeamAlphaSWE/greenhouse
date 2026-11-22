@@ -43,6 +43,8 @@ def get(url, **kwargs):
         return Response(payload={"sensors": [SENSOR]})
     if url.endswith("/zones"):
         return Response(payload={"zones": ZONES})
+    if url.endswith("/sensors/health"):
+        return Response(payload={"sensors": []})
     if url.endswith("/latest"):
         return Response(status_code=404)
     if "/sensor_data/" in url:
