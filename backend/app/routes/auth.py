@@ -86,3 +86,13 @@ def admin_reset_password():
         return jsonify({"error": "Unexpected server error"}), 500
 
     return jsonify({"message": "Password reset"})
+
+
+@auth.get("/me")
+@require_auth
+def me():
+    return jsonify({"user": {
+        "id": g.user["id"],
+        "username": g.user["username"],
+        "admin": g.user.get("admin") is True,
+    }})
