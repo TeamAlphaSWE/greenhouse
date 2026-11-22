@@ -15,5 +15,10 @@ class UserRepository(Repository):
             "updated_at": datetime.now(timezone.utc),
         })
 
+    def all_alerts_disabled(self):
+        if self.find_one({"settings.alerts_enabled": False}) is None:
+            return False
+        return self.find_one({"settings.alerts_enabled": {"$ne": False}}) is None
+
 
 users = UserRepository()
