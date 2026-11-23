@@ -1,10 +1,7 @@
 """Report takes key values for parameters to generate reports later"""
 import os
-import pandas as pd
 import requests
-
-BACKEND_URL = os.environ.get("BACKEND_URL", "https://greenhouse.kentcs.org").rstrip("/")
-TIMEOUT_SECONDS = 10
+from api_client import BACKEND_URL, TIMEOUT_SECONDS
 
 """Takes date (start & end range) and zone/sensor as input and grab data using respective filter options"""
 def print_report(start = None, end = None, zone = None, sensor = None):

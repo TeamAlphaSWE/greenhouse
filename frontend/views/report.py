@@ -19,6 +19,8 @@ def update_dashboard():
     start = end = None
     if period in RANGES:
         start, end = now - timedelta(days=RANGES[period]), now
+    elif period == "All history":
+        start = end = None
     elif period == "Custom":
         selected_dates = st.date_input(
             "Start and end dates (UTC)",
@@ -33,7 +35,6 @@ def update_dashboard():
             return
         start = datetime.combine(first, time.min, tzinfo=timezone.utc)
         end = datetime.combine(last + timedelta(days=1), time.min, tzinfo=timezone.utc)
-
     filter_options = st.selectbox(
         "Filter with Zone or Sensor?",
         options = ["Zones", "Sensors"]
@@ -66,6 +67,7 @@ def update_dashboard():
                 report_data = print_report(start=start, end=end, zone=zone, sensor=sensor)
                 st.success("Your report has been generated!")
                 st.json(report_data)
-            except:
+            except Exception as e:
                 st.error("There was an issue generating your requested report...")
+                st.exception(e)
 update_dashboard()

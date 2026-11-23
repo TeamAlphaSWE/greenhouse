@@ -3,7 +3,7 @@ from datetime import datetime
 from app.repositories.sensor_data import sensor_data as sensor_data_repository
 from app.repositories.alerts import alerts as alerts_repository
 import statistics
-report = Blueprint("reports", __name__, url_prefix="/api/v1/report")
+report = Blueprint("report", __name__, url_prefix="/api/v1/report")
 
 @report.post('/')
 def generate_report():
@@ -30,7 +30,7 @@ def generate_report():
     """If all is selected it would just check all zones/sensors and count number alerts collected during specified timeframe"""
     if zone_info and zone_info != "All":
         report_filter["zone_id"] = zone_info
-    if sensor_info and zone_info != "All":
+    if sensor_info and sensor_info != "All":
         report_filter["sensor_id"] = sensor_info
 
     """Error state"""
@@ -45,7 +45,7 @@ def generate_report():
         if sensor_info and sensor_info != "All":
             alert_filter["sensor_id"] = sensor_info
 
-        num_alerts = alerts_repository.count_documents(alert_filter)
+        num_alerts = alerts_repository.collection.count_documents(alert_filter)
     except Exception as e:
         return jsonify({"error": f"Server error: {str(e)}"}), 500
 
@@ -59,7 +59,7 @@ def generate_report():
             "message": "No data for this time range can be reported, please choose another time to report on."
         }), 200
 
-    """Temperature and Humidty Statistics: provides average, min, and max"""
+    """Temperature and Humidity Statistics: provides average, min, and max"""
     summary = {
         "temperature": {
             "min": round(min(temperatures), 2) if temperatures else None,
