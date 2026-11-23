@@ -11,6 +11,7 @@ alert=st.Page("views/alert.py", title="Alert")
 settings=st.Page("views/settings.py", title="Settings")
 credits=st.Page("views/credits.py", title="Credits")
 zones=st.Page("views/zones.py", title="Zones")
+report=st.Page("views/report.py", title="Report")
 
 if not st.session_state.get("logged_in", False):
     nav = st.navigation(
@@ -19,7 +20,7 @@ if not st.session_state.get("logged_in", False):
     )
 else:
     nav = st.navigation(
-        [landing, sensors_page, zones, alert, settings, credits]
+        [landing, sensors_page, zones, alert, report, settings, credits]
     )
     if "settings" not in st.session_state:
         try:
