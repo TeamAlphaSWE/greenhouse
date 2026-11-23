@@ -1,3 +1,4 @@
+import os
 import subprocess
 import sys
 from pathlib import Path
@@ -44,6 +45,8 @@ frontend_python = python_for(frontend)
 if frontend.exists() and frontend_python.exists():
     print("Starting frontend...")
 
+    frontend_env = {**os.environ, "BACKEND_URL": os.environ.get("BACKEND_URL", "http://127.0.0.1:5000")}
+
     processes.append(
         subprocess.Popen(
             [
@@ -54,6 +57,7 @@ if frontend.exists() and frontend_python.exists():
                 "app.py",
             ],
             cwd=frontend,
+            env=frontend_env,
         )
     )
 
