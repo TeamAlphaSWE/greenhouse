@@ -89,7 +89,14 @@ class DashboardTests(unittest.TestCase):
                 if url.endswith('/sensors'):
                     return {"sensors": [{"id": s, "name": s, "status": "active"}
                                         for s in ["A", "B"]]}
-                return {"sensor_data": self.records[url.rsplit('/', 1)[-1]]}
+                if url.endswith('/areas/overview'):
+                    return {"zones": [], "summary": {"total": 0, "normal": 0,
+                                                     "out_of_range": 0, "offline_unknown": 0}}
+                if url.endswith('/maps'):
+                    return {"maps": []}
+                if '/sensor_data/' in url:
+                    return {"sensor_data": self.records[url.rsplit('/', 1)[-1]]}
+                raise AssertionError(f"unexpected GET {url}")
         return Response()
 
     def test_controls_sensor_change_and_single_chart(self):
@@ -98,19 +105,19 @@ class DashboardTests(unittest.TestCase):
             self.assertFalse(app.exception)
             self.assertEqual(len(app.get("vega_lite_chart")), 1)
             self.assertIn("2 readings", app.caption[-1].value)
-            app.selectbox(key="trend_range").select("24 hours").run()
+            app.button_group(key="trend_range").set_value("24 hours").run()
             self.assertIn("1 readings", app.caption[-1].value)
-            app.selectbox(key="trend_sensor").select("B").run()
+            app.button_group(key="trend_sensor").set_value("B").run()
             self.assertTrue(self.urls[-1].endswith("/sensor_data/B"))
             self.assertIn("Sensor: B", app.caption[0].value)
-            app.selectbox(key="trend_range").select("All history").run()
+            app.button_group(key="trend_range").set_value("All history").run()
             self.assertIn("3 readings", app.caption[-1].value)
             self.assertEqual(len(app.get("vega_lite_chart")), 1)
-            app.selectbox(key="trend_range").select("Custom").run()
+            app.button_group(key="trend_range").set_value("Custom").run()
             app.date_input[0].set_value((date(2020,1,1), date(2020,1,2))).run()
             self.assertFalse(app.exception)
             self.assertEqual(len(app.get("vega_lite_chart")), 0)
-            self.assertIn("No sensor data", app.info[0].value)
+            self.assertTrue(any("No sensor data" in i.value for i in app.info))
 
     def test_api_failure(self):
         import requests
