@@ -1,14 +1,14 @@
 from pathlib import Path
 import base64
-import streamlit as st
-<<<<<<< Updated upstream
 import requests
-=======
-from sensor_api import BACKEND_URL, TIMEOUT_SECONDS  
->>>>>>> Stashed changes
+import streamlit as st
+import requests
+
+from api_client import BACKEND_URL, TIMEOUT_SECONDS
 
 st.set_page_config(
     page_title="Greenhouse Dashboard Login",
+    page_icon="🌱",
     layout="wide"
 )
 
@@ -193,14 +193,14 @@ st.markdown(
         font-size: 16px;
     }}
 
-    .stButton,
-    [data-testid="stButton"] {{
+    .stFormSubmitButton,
+    [data-testid="stFormSubmitButton"] {{
         width: 50% !important;
         display: flex !important;
         justify-content: center !important;
     }}
 
-    .stButton > button {{
+    .stFormSubmitButton > button {{
         width: 320px !important;
         height: 56px !important;
         margin: 0 auto !important;
@@ -213,7 +213,7 @@ st.markdown(
         font-weight: 600 !important;
     }}
 
-    .stButton > button:hover {{
+    .stFormSubmitButton > button:hover {{
         background: #1f472d;
         color: white;
     }}
@@ -294,41 +294,39 @@ with right:
         unsafe_allow_html=True
     )
 
-    username = st.text_input(
-        "Email",
-        placeholder="ID",
-        label_visibility="collapsed"
-    )
+    with st.form("login_form", border=False):
+        username = st.text_input(
+            "Email",
+            placeholder="ID",
+            label_visibility="collapsed"
+        )
 
-    password = st.text_input(
-        "Password",
-        type="password",
-        placeholder="Password",
-        label_visibility="collapsed"
-    )
+        password = st.text_input(
+            "Password",
+            type="password",
+            placeholder="Password",
+            label_visibility="collapsed"
+        )
 
-    username=username.lower()
+        submitted = st.form_submit_button("Sign In →")
 
-    if st.button("Sign In →"):
+        username=username.lower()
+        
+    
+    if submitted:
         if not username or not password:
             st.error("Please enter your username and password")
         else:
             try: 
                 response = requests.post(
-<<<<<<< Updated upstream
-                    "https://greenhouse.kentcs.org/api/v1/login",
-=======
-                    "BACKEND_URL",
->>>>>>> Stashed changes
+
+                    f"{BACKEND_URL}/api/v1/login",
+
                     json={
                         "username":username,
                         "password":password
                     },
-<<<<<<< Updated upstream
-                    timeout=10
-=======
                     timeout=TIMEOUT_SECONDS
->>>>>>> Stashed changes
                 )
                 if response.status_code ==200:
                     result = response.json()
@@ -337,7 +335,6 @@ with right:
                     st.session_state["token"] = result["token"]
                     st.rerun()
 
-<<<<<<< Updated upstream
                 elif response.status_code == 401:
                     st.error("Invalid username or password.")
 
@@ -345,8 +342,4 @@ with right:
                     st.error("Login failed. Please try again.")
 
             except requests.exceptions.RequestException:
-                st.error("Could not connect to the login sever.")
-=======
-                else:
-                  st.error("Invalid email or password.") 
->>>>>>> Stashed changes
+                st.error("Could not connect to the login server.")

@@ -1,13 +1,17 @@
+import requests
 import streamlit as st
 
+from settings_api import save_settings
 from theme import page_header
-from units import CELSIUS, FAHRENHEIT, temperature_unit
+from units import CELSIUS, FAHRENHEIT
 
+current = st.session_state["settings"]
 page_header("Settings", "Manage greenhouse preferences and alert settings.")
 
 
 st.set_page_config(
-    page_title="Settings",
+    page_title="Settings | Greenhouse",
+    page_icon="🌱",
     layout="wide"
 )
 
@@ -23,51 +27,9 @@ unit_options = [CELSIUS, FAHRENHEIT]
 selected_unit = st.radio(
     "Temperature Unit",
     unit_options,
-    index=unit_options.index(temperature_unit()),
+    index=unit_options.index(current["temperature_unit"]),
     horizontal=True
 )
-# Saved in the session so every page shows temperatures in this unit.
-st.session_state["temperature_unit"] = selected_unit
-
-col1, col2 = st.columns(2)
-
-with col1:
-    st.number_input(
-        f"Minimum Temperature ({selected_unit})",
-        value=18.0
-    )
-
-with col2:
-    st.number_input(
-        f"Maximum Temperature ({selected_unit})",
-        value=28.0
-    )
-
-st.divider()
-
-# -------------------------
-# Humidity
-# -------------------------
-
-st.subheader("Humidity")
-
-col1, col2 = st.columns(2)
-
-with col1:
-    st.number_input(
-        "Minimum Humidity (%)",
-        min_value=0,
-        max_value=100,
-        value=45
-    )
-
-with col2:
-    st.number_input(
-        "Maximum Humidity (%)",
-        min_value=0,
-        max_value=100,
-        value=80
-    )
 
 st.divider()
 
@@ -79,16 +41,17 @@ st.subheader("Alerts")
 
 alerts_enabled = st.toggle(
     "Enable Alerts",
-    value=True
+    value=current["alerts_enabled"]
 )
 
 email_alerts = st.toggle(
     "Enable Email Notifications",
-    value=False
+    value=current["email_alerts_enabled"]
 )
 
 email = st.text_input(
     "Notification Email",
+    value=current["notification_email"] or ""
 )
 
 st.divider()
@@ -102,4 +65,28 @@ if st.button(
     type="primary",
     use_container_width=True
 ):
-    st.success("Settings saved.")
+    new_settings = {
+        "temperature_unit": selected_unit,
+        "alerts_enabled": alerts_enabled,
+        "email_alerts_enabled": email_alerts,
+        "notification_email": email.strip() or None,
+    }
+    if new_settings["email_alerts_enabled"] and not new_settings["notification_email"]:
+        st.error("Enter a notification email to turn on email alerts")
+    else:
+        try:
+            saved = save_settings(new_settings)
+            st.session_state["settings"] = saved
+            st.session_state["temperature_unit"] = saved["temperature_unit"]
+            st.success("Settings saved.")
+        
+        except requests.HTTPError as error:
+            status = error.response.status_code
+            if status == 401:
+                st.error("You're not signed in or session has ended. Please sign in again.")
+            elif status == 400:
+                st.error(error.response.json().get("error", "Invalid settings"))
+            else:
+                st.error("Couldn't save settings. Please try again.")
+        except requests.RequestException:
+            st.error("Couldn't reach the server. Please try again.")

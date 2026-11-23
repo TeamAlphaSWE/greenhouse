@@ -34,13 +34,10 @@ def change_pass():
 
         else:
             token = st.session_state["token"]
-<<<<<<< Updated upstream
-=======
             if not token:
-                        st.error("Your session has expired. Please log in again.")
-                        return 
->>>>>>> Stashed changes
-
+                st.error("Your sesson expired please login again")
+                return 
+            
             headers = {
                 "Authorization": f"Bearer {token}"
             }

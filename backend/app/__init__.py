@@ -1,8 +1,14 @@
 from flask import Flask
+from dotenv import load_dotenv
+
+load_dotenv()
 
 from app.config import Config
 from app.db import init_db
 from app.json import MongoJSONProvider
+from app.services.email_service import EmailService
+
+from app.services.ai_service import AIService
 
 
 def create_app(config=None):
@@ -11,6 +17,27 @@ def create_app(config=None):
     app.config.from_object(Config)
     if config:
         app.config.from_mapping(config)
+
+    ai_settings = [
+        app.config.get("AI_BASE_URL"),
+        app.config.get("AI_API_KEY"),
+        app.config.get("AI_MODEL"),
+    ]
+
+    if all(ai_settings):
+        app.extensions["ai_service"] = AIService(app.config)
+    else:
+        app.extensions["ai_service"] = None
+        
+    email_settings = [
+        app.config.get("SMTP_HOST"),
+        app.config.get("SMTP_USER"),
+        app.config.get("SMTP_PASSWORD"),
+    ]
+    if all(email_settings):
+        app.extensions["email_service"] = EmailService(app.config)
+    else:
+        app.extensions["email_service"] = None
 
     init_db(app)
 
@@ -37,5 +64,14 @@ def create_app(config=None):
 
     from app.routes.maps import maps
     app.register_blueprint(maps)
+
+    from app.routes.settings import settings
+    app.register_blueprint(settings)
+
+    from app.routes.assistant import assistant
+    app.register_blueprint(assistant)
+
+    from app.routes.report import report
+    app.register_blueprint(report)
 
     return app
