@@ -34,7 +34,7 @@ sensor_data_collection = {
     "values":[
         {
             "type": "temperature",
-            "value": "24.5"
+            "value": 24.5
         },
         {
             "type": "humidity",

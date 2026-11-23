@@ -71,6 +71,27 @@ class HistoryTests(unittest.TestCase):
         self.assertTrue(pd.isna(result.Humidity.iloc[0]))
 
 
+def pin_segmented_controls(app):
+    """Re-pin every segmented_control's current value before any run().
+
+    AppTest's button_group wrapper (segmented_control's underlying widget) only
+    reads a widget's *current* session value as a list when you've just set it
+    yourself; for selection_mode="single" that value is actually a bare string,
+    so any OTHER segmented_control left untouched gets its string value iterated
+    character by character on the next run and crashes. Re-pinning every
+    segmented_control's current value (as a singleton list) before any run()
+    sidesteps that.
+    """
+    for widget in app.get("button_group"):
+        widget.set_value([widget.value])
+
+
+def select_segmented(app, key, value):
+    pin_segmented_controls(app)
+    app.button_group(key=key).set_value([value])
+    app.run()
+
+
 class DashboardTests(unittest.TestCase):
     def setUp(self):
         self.urls = []
@@ -89,28 +110,37 @@ class DashboardTests(unittest.TestCase):
                 if url.endswith('/sensors'):
                     return {"sensors": [{"id": s, "name": s, "status": "active"}
                                         for s in ["A", "B"]]}
-                return {"sensor_data": self.records[url.rsplit('/', 1)[-1]]}
+                if url.endswith('/areas/overview'):
+                    return {"zones": [], "summary": {"total": 0, "normal": 0,
+                                                     "out_of_range": 0, "offline_unknown": 0}}
+                if url.endswith('/maps'):
+                    return {"maps": []}
+                if '/sensor_data/' in url:
+                    return {"sensor_data": self.records[url.rsplit('/', 1)[-1]]}
+                raise AssertionError(f"unexpected GET {url}")
         return Response()
 
     def test_controls_sensor_change_and_single_chart(self):
         with patch("requests.get", side_effect=self.get):
             app = AppTest.from_file(str(PAGE)).run()
             self.assertFalse(app.exception)
-            self.assertEqual(len(app.get("vega_lite_chart")), 1)
+            self.assertEqual(len(app.get("arrow_vega_lite_chart")), 1)
             self.assertIn("2 readings", app.caption[-1].value)
-            app.selectbox(key="trend_range").select("24 hours").run()
+            select_segmented(app, "trend_range", "24 hours")
             self.assertIn("1 readings", app.caption[-1].value)
-            app.selectbox(key="trend_sensor").select("B").run()
+            select_segmented(app, "trend_sensor", "B")
             self.assertTrue(self.urls[-1].endswith("/sensor_data/B"))
             self.assertIn("Sensor: B", app.caption[0].value)
-            app.selectbox(key="trend_range").select("All history").run()
+            select_segmented(app, "trend_range", "All history")
             self.assertIn("3 readings", app.caption[-1].value)
-            self.assertEqual(len(app.get("vega_lite_chart")), 1)
-            app.selectbox(key="trend_range").select("Custom").run()
-            app.date_input[0].set_value((date(2020,1,1), date(2020,1,2))).run()
+            self.assertEqual(len(app.get("arrow_vega_lite_chart")), 1)
+            select_segmented(app, "trend_range", "Custom")
+            pin_segmented_controls(app)
+            app.date_input[0].set_value((date(2020,1,1), date(2020,1,2)))
+            app.run()
             self.assertFalse(app.exception)
-            self.assertEqual(len(app.get("vega_lite_chart")), 0)
-            self.assertIn("No sensor data", app.info[0].value)
+            self.assertEqual(len(app.get("arrow_vega_lite_chart")), 0)
+            self.assertTrue(any("No sensor data" in i.value for i in app.info))
 
     def test_api_failure(self):
         import requests

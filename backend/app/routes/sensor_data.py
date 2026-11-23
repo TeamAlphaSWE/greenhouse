@@ -5,6 +5,7 @@ from pymongo.errors import PyMongoError
 from app.repositories.alerts import alerts as alert_repository
 from app.repositories.sensor_data import sensor_data as sensor_data_repository
 from app.repositories.sensors import sensors as sensor_repository
+from app.repositories.users import users as user_repository
 from app.repositories.zones import zones as zone_repository
 
 sensor_data = Blueprint("sensor_data", __name__, url_prefix="/api/v1/sensor_data")
@@ -73,6 +74,9 @@ def create_sensor_data():
 
 
 def _check_alerts(sensor, values):
+    if user_repository.all_alerts_disabled():
+        return
+
     area_id = sensor.get("area_id")
     if not area_id:
         return

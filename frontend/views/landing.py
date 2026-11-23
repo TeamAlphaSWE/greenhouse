@@ -2,7 +2,6 @@
 from datetime import datetime, time, timedelta, timezone
 from html import escape
 from pathlib import Path
-import os
 from zoneinfo import ZoneInfo
 
 import pandas as pd
@@ -10,6 +9,7 @@ import requests
 import streamlit as st
 from PIL import Image
 
+from api_client import BACKEND_URL, TIMEOUT_SECONDS, auth_headers
 from charts import time_series_chart
 from components.area_map import area_map
 from theme import inject_sidebar
@@ -21,7 +21,6 @@ st.set_page_config(
     layout="wide"
 )
 
-BACKEND_URL = os.environ.get("BACKEND_URL", "https://greenhouse.kentcs.org").rstrip("/")
 ASSETS = Path(__file__).resolve().parent.parent / "assets"
 RANGES = {"24 hours": 1, "7 days": 7, "30 days": 30}
 MAP_VIEWBOX_WIDTH = 1000
@@ -287,7 +286,7 @@ html, body, .stApp, [data-testid="stAppViewContainer"], [data-testid="stMain"],
 
 
 def api_get(path):
-    response = requests.get(f"{BACKEND_URL}{path}", timeout=10)
+    response = requests.get(f"{BACKEND_URL}{path}", headers=auth_headers(), timeout=TIMEOUT_SECONDS)
     response.raise_for_status()
     return response.json()
 
@@ -515,6 +514,21 @@ def update_dashboard():
         key="trend_sensor",
         selection_mode="single",
     )
+
+    # Map the selected sensor to its area and update the selected area if needed.
+    sensor_to_area = {
+        str(sensor_id): area_id
+        for area_id, sensor_id in area_to_sensor.items()
+    }
+    # Get the area ID associated with the selected sensor, if any.
+    selected_area_id = sensor_to_area.get(str(selected_id)) if selected_id is not None else None
+    current_area_id = st.session_state.get("selected_area_id")
+    if (
+        (str(current_area_id) if current_area_id is not None else None)
+        != (str(selected_area_id) if selected_area_id is not None else None)
+    ):
+        st.session_state["selected_area_id"] = selected_area_id
+        st.rerun()
 
     with st.container(key="sensor_trends"):
         st.subheader("Temperature & Humidity Over Time")
