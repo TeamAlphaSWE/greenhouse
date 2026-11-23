@@ -328,3 +328,52 @@ def test_admin_reset_password_database_error_returns_500(app, client, monkeypatc
 
     assert response.status_code == 500
     assert response.get_json() == {"error": "Unexpected server error"}
+
+
+def test_me_returns_current_user(app, client):
+    user = seed_user(app, username="alice")
+
+    response = client.get("/api/v1/me", headers=_auth_header(app, user))
+
+    assert response.status_code == 200
+    assert response.get_json() == {"user": {"id": user["id"], "username": "alice", "admin": False}}
+
+
+def test_me_returns_admin_status(app, client):
+    admin = seed_user(app, username="admin", admin=True)
+
+    response = client.get("/api/v1/me", headers=_auth_header(app, admin))
+
+    assert response.get_json()["user"]["admin"] is True
+
+
+def test_me_never_returns_password_hash(app, client):
+    user = seed_user(app)
+
+    body = client.get("/api/v1/me", headers=_auth_header(app, user)).get_json()
+
+    assert "password_hash" not in body["user"]
+
+
+@pytest.mark.parametrize("headers", [
+    {},
+    {"Authorization": "Bearer not-a-real-token"},
+    {"Authorization": "Token abc"},
+])
+def test_me_invalid_token_returns_401(client, headers):
+    response = client.get("/api/v1/me", headers=headers)
+
+    assert response.status_code == 401
+    assert response.get_json() == {"error": "Missing or invalid Authorization header"}
+
+
+def test_me_token_for_deleted_user_returns_401(app, client):
+    user = seed_user(app)
+    headers = _auth_header(app, user)
+    with app.app_context():
+        get_collection("users").delete_one({"_id": ObjectId(user["id"])})
+
+    response = client.get("/api/v1/me", headers=headers)
+
+    assert response.status_code == 401
+    assert response.get_json() == {"error": "Missing or invalid Authorization header"}
