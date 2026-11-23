@@ -1,6 +1,6 @@
 import streamlit as st
 import requests        # for making HTTP requests to the Flask local server
-
+from settings_api import get_settings, DEFAULT_SETTINGS
 # Pandas and Numpy are a packaged deal since Pandas relies on Numpy for numerical operations!!
 # lets work on a dashboard!
 login = st.Page("login.py", title="Login")
@@ -21,6 +21,13 @@ else:
     nav = st.navigation(
         [landing, sensors_page, zones, alert, settings, credits]
     )
+    if "settings" not in st.session_state:
+        try:
+            st.session_state["settings"] = get_settings()
+        except requests.RequestException:
+            st.session_state["settings"] = dict(DEFAULT_SETTINGS)
+            st.toast("Saved settings could not be loaded. Settings will be set to defaults.")
+        st.session_state["temperature_unit"] = st.session_state["settings"]["temperature_unit"]
 
 if st.session_state.get("_last_page") != nav.title:
     st.session_state.pop("activating_sensor_id", None)
