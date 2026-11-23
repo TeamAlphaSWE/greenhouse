@@ -1,7 +1,11 @@
 from pathlib import Path
 import base64
 import streamlit as st
+<<<<<<< Updated upstream
 import requests
+=======
+from sensor_api import BACKEND_URL, TIMEOUT_SECONDS  
+>>>>>>> Stashed changes
 
 st.set_page_config(
     page_title="Greenhouse Dashboard Login",
@@ -311,12 +315,20 @@ with right:
         else:
             try: 
                 response = requests.post(
+<<<<<<< Updated upstream
                     "https://greenhouse.kentcs.org/api/v1/login",
+=======
+                    "BACKEND_URL",
+>>>>>>> Stashed changes
                     json={
                         "username":username,
                         "password":password
                     },
+<<<<<<< Updated upstream
                     timeout=10
+=======
+                    timeout=TIMEOUT_SECONDS
+>>>>>>> Stashed changes
                 )
                 if response.status_code ==200:
                     result = response.json()
@@ -325,6 +337,7 @@ with right:
                     st.session_state["token"] = result["token"]
                     st.rerun()
 
+<<<<<<< Updated upstream
                 elif response.status_code == 401:
                     st.error("Invalid username or password.")
 
@@ -333,3 +346,7 @@ with right:
 
             except requests.exceptions.RequestException:
                 st.error("Could not connect to the login sever.")
+=======
+                else:
+                  st.error("Invalid email or password.") 
+>>>>>>> Stashed changes
