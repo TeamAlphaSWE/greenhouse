@@ -10,8 +10,11 @@ permissions:
   contents: read
 
 jobs:
-  test:
+  backend-tests:
     uses: ./.github/workflows/backend-tests.yml
+
+  frontend-tests:
+    uses: ./.github/workflows/frontend-tests.yml
 
   validate-deploy-files:
     runs-on: ubuntu-latest
@@ -25,7 +28,7 @@ jobs:
           node --check frontend/http_transport.js
 
   deploy:
-    needs: [test, validate-deploy-files]
+    needs: [backend-tests, frontend-tests, validate-deploy-files]
     runs-on: ubuntu-latest
     timeout-minutes: 15
     concurrency:
