@@ -509,7 +509,7 @@ def update_dashboard():
         key="trend_sensor",
         selection_mode="single",
     )
-#----------- BUG FIX -------------------
+
     # Map the selected sensor to its area and update the selected area if needed.
     sensor_to_area = {
         str(sensor_id): area_id
@@ -524,7 +524,7 @@ def update_dashboard():
     ):
         st.session_state["selected_area_id"] = selected_area_id
         st.rerun()
-#---------------------------
+
     with st.container(key="sensor_trends"):
         st.subheader("Temperature & Humidity Over Time")
         period = st.segmented_control(
