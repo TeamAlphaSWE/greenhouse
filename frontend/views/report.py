@@ -2,17 +2,23 @@ import pandas as pd
 import streamlit as st
 from sensor_api import get_sensors, get_zones
 from reports_api import print_report
+from theme import page_header
 from datetime import datetime, time, timedelta, timezone
 
+st.set_page_config(
+    page_title="Report | Greenhouse",
+    page_icon="🌱",
+    layout="wide"
+)
+
 #---------------NOT FINISHED-------------#
-st.title("Report")
+page_header("Report", "Get more detailed insight to the Greenhouse info")
 RANGES = {"24 hours": 1, "7 days": 7, "30 days": 30}
 zones = get_zones()
 sensors = get_sensors()
 
 def update_dashboard():
-    st.subheader("Get more detailed insight to the Greenhouse info")
-    
+
     period = st.selectbox("Please select time range to report", [*RANGES, "All history", "Custom"],
         index=1, key="trend_range")
     now = datetime.now(timezone.utc)
