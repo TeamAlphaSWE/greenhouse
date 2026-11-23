@@ -68,7 +68,7 @@ def create_app(config=None):
     from app.routes.settings import settings
     app.register_blueprint(settings)
 
-    from app.routes.report import report
-    app.register_blueprint(report)
+    from app.routes.assistant import assistant
+    app.register_blueprint(assistant)
 
     return app
