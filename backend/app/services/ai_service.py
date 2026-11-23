@@ -1,7 +1,11 @@
 from langchain_openai import ChatOpenAI
 from openai import APIConnectionError, APIStatusError, APITimeoutError
 import base64
-from langchain_core.messages import HumanMessage
+from langchain_core.messages import HumanMessage, ToolMessage
+
+# Bounds how many tool-call round trips a single invoke() can take, so a model
+# that keeps calling tools instead of answering can't loop forever.
+MAX_TOOL_ROUNDS = 5
 
 ALLOWED_IMAGE_MIMES = {
     "image/jpeg",
@@ -66,10 +70,29 @@ class AIService:
             store=False,
         )
 
-    def invoke(self, messages):
+    def invoke(self, messages, tools=None):
+        model = self.model.bind_tools(tools) if tools else self.model
+        tools_by_name = {t.name: t for t in tools} if tools else {}
+        messages = list(messages)
+
+        for _ in range(MAX_TOOL_ROUNDS):
+            response = self._call_model(model, messages)
+            tool_calls = getattr(response, "tool_calls", None)
+            if not isinstance(tool_calls, list) or not tool_calls:
+                return response.text
+
+            messages.append(response)
+            for call in response.tool_calls:
+                messages.append(ToolMessage(
+                    content=self._run_tool(tools_by_name, call),
+                    tool_call_id=call["id"],
+                ))
+
+        raise RuntimeError("Assistant did not produce an answer within the tool-call limit")
+
+    def _call_model(self, model, messages):
         try:
-            response = self.model.invoke(messages)
-            return response.text
+            return model.invoke(messages)
         except APITimeoutError as error:
             raise RuntimeError("LLM request timed out") from error
         except APIConnectionError as error:
@@ -77,4 +100,15 @@ class AIService:
         except APIStatusError as error:
             raise RuntimeError(
                 f"LLM provider returned status {error.status_code}"
-            ) from error 
+            ) from error
+
+    def _run_tool(self, tools_by_name, call):
+        tool = tools_by_name.get(call["name"])
+        if tool is None:
+            return f"Unknown tool: {call['name']}"
+        try:
+            return str(tool.invoke(call["args"]))
+        except Exception as error:
+            # A tool failing (bad args, a DB hiccup, ...) shouldn't fail the
+            # whole conversation - tell the model so it can say so, instead.
+            return f"Tool '{call['name']}' failed: {error}"

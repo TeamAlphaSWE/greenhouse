@@ -134,6 +134,33 @@ response = ai_service.invoke(messages)
 
 The `invoke()` method accepts LangChain-compatible messages and returns the response content.
 
+## Tool Calling
+
+`invoke()` takes an optional `tools` argument: a list of LangChain `@tool`-decorated
+functions the model can call on its own, instead of the caller pre-loading data into
+the prompt. `AIService` binds them to the model and runs the round-trip loop itself
+(model responds with a tool call -> the tool runs -> the result goes back to the model
+as a `ToolMessage` -> repeat until the model returns a final answer, capped at 5 rounds).
+A tool raising an exception doesn't fail the request - the error is reported back to
+the model as that tool's result, so it can say it couldn't retrieve the data.
+
+```python
+from langchain_core.tools import tool
+
+@tool
+def get_greenhouse_zones() -> str:
+    """List the greenhouse's zones."""
+    return "North, South"
+
+response = current_app.extensions["ai_service"].invoke(
+    [("user", "What zones exist?")],
+    tools=[get_greenhouse_zones],
+)
+```
+
+See `app/services/assistant_tools.py` and `app/services/assistant_context.py` for
+the Ask assistant's (`POST /api/v1/assistant/chat`) real tools built this way.
+
 ## Constructing Image Messages
 
 The `build_image_message()` helper converts image bytes into a base64 data URI
