@@ -1,12 +1,7 @@
 """Helpers for reading and saving the logged-in user settings from the backend API."""
 import requests
-import streamlit as st
 
-#TODO (#209): temporary import. 209 is expected to add frontend/api_client.py, replace with:
-# from api_client import BACKEND_URL, TIMEOUT_SECONDS, auth_headers
-# and delete the auth_headers() copy below
-
-from sensor_api import BACKEND_URL, TIMEOUT_SECONDS
+from api_client import BACKEND_URL, TIMEOUT_SECONDS, auth_headers
 
 DEFAULT_SETTINGS = {
     "temperature_unit": "°C",
@@ -14,11 +9,6 @@ DEFAULT_SETTINGS = {
     "email_alerts_enabled": False,
     "notification_email": None,
 }
-
-#TODO (#209) : temporary copy of api_client.auth_headers(). Delete aftet #209 gets merged
-def auth_headers():
-    token = st.session_state.get("token")
-    return {"authorization": f"Bearer {token}"} if token else {}
 
 def get_settings():
     response = requests.get(
