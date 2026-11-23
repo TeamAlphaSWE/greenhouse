@@ -7,6 +7,7 @@ import pytest
 from app.db import get_collection
 from app.repositories.sensor_data import sensor_data
 from app.repositories.sensors import sensors
+from app.repositories.users import users
 from app.repositories.zones import zones
 
 
@@ -447,3 +448,67 @@ def test_create_sensor_data_invalid_timestamp_returns_400(client, timestamp):
 
     assert response.status_code == 400
     assert response.get_json() == {"error": "timestamp must be a UTC ISO 8601 string"}
+
+
+def _add_user(app, username, settings=None):
+    doc = {"username": username, "password_hash": "x", "admin": False}
+    if settings is not None:
+        doc["settings"] = settings
+    with app.app_context():
+        get_collection("users").insert_one(doc)
+
+
+def _post_out_of_range_reading(app, client):
+    body = valid_reading()
+    sensor_id, _ = _active_sensor_in_area(app, body["hardware_id"])
+    body["values"] = [{"type": "temperature", "value": 32.0}]
+    response = client.post("/api/v1/sensor_data", json=body)
+    with app.app_context():
+        alert_count = get_collection("alerts").count_documents({"sensor_id": ObjectId(sensor_id)})
+    return response, alert_count
+
+
+def test_create_sensor_data_no_alert_when_every_user_disabled_alerts(app, client):
+    _add_user(app, "alice", {"alerts_enabled": False})
+    _add_user(app, "bob", {"alerts_enabled": False})
+
+    response, alert_count = _post_out_of_range_reading(app, client)
+
+    assert response.status_code == 201
+    assert alert_count == 0
+
+
+def test_create_sensor_data_alert_when_any_user_has_alerts_enabled(app, client):
+    _add_user(app, "alice", {"alerts_enabled": False})
+    _add_user(app, "bob", {"alerts_enabled": True})
+
+    _, alert_count = _post_out_of_range_reading(app, client)
+
+    assert alert_count == 1
+
+
+def test_create_sensor_data_alert_when_a_user_has_no_settings(app, client):
+    _add_user(app, "alice", {"alerts_enabled": False})
+    _add_user(app, "bob")
+
+    _, alert_count = _post_out_of_range_reading(app, client)
+
+    assert alert_count == 1
+
+
+def test_create_sensor_data_alert_when_no_users_exist(app, client):
+    _, alert_count = _post_out_of_range_reading(app, client)
+
+    assert alert_count == 1
+
+
+def test_create_sensor_data_saves_reading_when_preference_check_fails(app, client, monkeypatch):
+    def fail(*args, **kwargs):
+        raise PyMongoError("database is down")
+
+    monkeypatch.setattr(users, "all_alerts_disabled", fail)
+
+    response, alert_count = _post_out_of_range_reading(app, client)
+
+    assert response.status_code == 201
+    assert alert_count == 0

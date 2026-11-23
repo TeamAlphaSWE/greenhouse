@@ -2,7 +2,6 @@
 from datetime import datetime, time, timedelta, timezone
 from html import escape
 from pathlib import Path
-import os
 from zoneinfo import ZoneInfo
 
 import pandas as pd
@@ -10,6 +9,7 @@ import requests
 import streamlit as st
 from PIL import Image
 
+from api_client import BACKEND_URL, TIMEOUT_SECONDS, auth_headers
 from charts import time_series_chart
 from components.area_map import area_map
 from theme import inject_sidebar
@@ -21,7 +21,6 @@ st.set_page_config(
     layout="wide"
 )
 
-BACKEND_URL = os.environ.get("BACKEND_URL", "https://greenhouse.kentcs.org").rstrip("/")
 ASSETS = Path(__file__).resolve().parent.parent / "assets"
 RANGES = {"24 hours": 1, "7 days": 7, "30 days": 30}
 MAP_VIEWBOX_WIDTH = 1000
@@ -287,7 +286,7 @@ html, body, .stApp, [data-testid="stAppViewContainer"], [data-testid="stMain"],
 
 
 def api_get(path):
-    response = requests.get(f"{BACKEND_URL}{path}", timeout=10)
+    response = requests.get(f"{BACKEND_URL}{path}", headers=auth_headers(), timeout=TIMEOUT_SECONDS)
     response.raise_for_status()
     return response.json()
 

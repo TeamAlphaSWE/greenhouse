@@ -4,5 +4,7 @@ on:
   pull_request:
 
 jobs:
-  test:
+  backend:
     uses: ./.github/workflows/backend-tests.yml
+  frontend:
+    uses: ./.github/workflows/frontend-tests.yml

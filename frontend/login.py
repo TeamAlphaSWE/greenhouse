@@ -1,6 +1,9 @@
 from pathlib import Path
 import base64
+import requests
 import streamlit as st
+
+from api_client import BACKEND_URL, TIMEOUT_SECONDS
 
 st.set_page_config(
     page_title="Greenhouse Dashboard Login",
@@ -306,14 +309,25 @@ with right:
 
         submitted = st.form_submit_button("Sign In →")
 
-    username=username.lower()
+    username = username.lower()
 
     if submitted:
-                    
-        if username == "admin" and password == "1234":
-            st.session_state["logged_in"] = True
-            st.session_state["username"] = username
-            st.rerun()
-
+        try:
+            response = requests.post(
+                f"{BACKEND_URL}/api/v1/login",
+                json={"username": username, "password": password},
+                timeout=TIMEOUT_SECONDS,
+            )
+            token = response.json().get("token") if response.status_code == 200 else None
+        except (requests.RequestException, ValueError):
+            st.error("Unable to connect to the server.")
         else:
-            st.error("Invalid email or password.") 
+            if token:
+                st.session_state["token"] = token
+                st.session_state["logged_in"] = True
+                st.session_state["username"] = username
+                st.rerun()
+            elif response.status_code == 401:
+                st.error("Invalid email or password.")
+            else:
+                st.error("Login failed. Please try again.")
