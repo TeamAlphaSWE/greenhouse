@@ -220,6 +220,130 @@ def test_invoke_with_tools_raises_after_max_rounds(mock_chat_openai, ai_config):
         ai.invoke([("user", "hi")], tools=[get_greeting])
 
 
+def unsupported_tools_error():
+    return APIStatusError(
+        "Parameter 'tools' is not supported.",
+        response=MagicMock(status_code=400),
+        body={
+            "code": "unsupported_parameter",
+            "message": "Parameter 'tools' is not supported.",
+            "param": "tools",
+            "type": "invalid_request_error",
+        },
+    )
+
+
+def test_tool_instructions_include_full_multiline_description():
+    @tool
+    def get_sensor_status(sensor_name: str = "") -> str:
+        """Get sensor reporting status, battery level, and last-seen time.
+
+        Pass sensor_name to look up one sensor, or leave it empty for all sensors.
+        """
+        return "[]"
+
+    instructions = AIService._with_tool_instructions([], [get_sensor_status])[0].content
+
+    # Regression: a previous version only kept the docstring's first line,
+    # silently dropping usage guidance a weaker model actually needs (Rocky
+    # refused to list all sensors because it never saw this line).
+    assert "leave it empty for all sensors" in instructions
+
+
+@patch("app.services.ai_service.ChatOpenAI")
+def test_invoke_falls_back_to_prompted_tools_when_native_tools_unsupported(mock_chat_openai, ai_config):
+    mock_model = mock_chat_openai.return_value
+    bound_model = mock_model.bind_tools.return_value
+    bound_model.invoke.side_effect = unsupported_tools_error()
+
+    tool_call_response = MagicMock()
+    tool_call_response.text.return_value = 'TOOL_CALL: get_greeting({"name": "Rocky"})'
+    final_response = MagicMock()
+    final_response.text.return_value = "Hello, Rocky!"
+    mock_model.invoke.side_effect = [tool_call_response, final_response]
+
+    @tool
+    def get_greeting(name: str) -> str:
+        """Build a greeting for name."""
+        return f"Hi {name}"
+
+    ai = AIService(ai_config)
+    response = ai.invoke([("user", "greet Rocky")], tools=[get_greeting])
+
+    assert response == "Hello, Rocky!"
+    mock_model.bind_tools.assert_called_once_with([get_greeting])
+    assert mock_model.invoke.call_count == 2
+
+    first_prompt = mock_model.invoke.call_args_list[0].args[0]
+    assert "get_greeting" in first_prompt[0].content  # prepended tool-instructions SystemMessage
+
+    second_prompt = mock_model.invoke.call_args_list[1].args[0]
+    assert "Hi Rocky" in second_prompt[-1].content  # appended TOOL_RESULT message
+
+
+@patch("app.services.ai_service.ChatOpenAI")
+def test_invoke_does_not_fall_back_for_unrelated_status_errors_with_tools(mock_chat_openai, ai_config):
+    mock_model = mock_chat_openai.return_value
+    bound_model = mock_model.bind_tools.return_value
+    bound_model.invoke.side_effect = APIStatusError(
+        "Rate limited",
+        response=MagicMock(status_code=429),
+        body={"code": "rate_limit_exceeded", "message": "slow down", "param": None, "type": "requests"},
+    )
+
+    @tool
+    def get_greeting(name: str) -> str:
+        """Build a greeting for name."""
+        return f"Hi {name}"
+
+    ai = AIService(ai_config)
+    with pytest.raises(RuntimeError, match="LLM provider returned status 429"):
+        ai.invoke([("user", "hi")], tools=[get_greeting])
+
+    mock_model.invoke.assert_not_called()
+
+
+@patch("app.services.ai_service.ChatOpenAI")
+def test_prompted_tools_raises_after_max_rounds(mock_chat_openai, ai_config):
+    mock_model = mock_chat_openai.return_value
+    bound_model = mock_model.bind_tools.return_value
+    bound_model.invoke.side_effect = unsupported_tools_error()
+
+    looping_response = MagicMock()
+    looping_response.text.return_value = 'TOOL_CALL: get_greeting({"name": "Rocky"})'
+    mock_model.invoke.return_value = looping_response
+
+    @tool
+    def get_greeting(name: str) -> str:
+        """Build a greeting for name."""
+        return f"Hi {name}"
+
+    ai = AIService(ai_config)
+    with pytest.raises(RuntimeError, match="tool-call limit"):
+        ai.invoke([("user", "hi")], tools=[get_greeting])
+
+
+@patch("app.services.ai_service.ChatOpenAI")
+def test_prompted_tools_returns_raw_text_on_malformed_tool_call(mock_chat_openai, ai_config):
+    mock_model = mock_chat_openai.return_value
+    bound_model = mock_model.bind_tools.return_value
+    bound_model.invoke.side_effect = unsupported_tools_error()
+
+    malformed_response = MagicMock()
+    malformed_response.text.return_value = "TOOL_CALL: get_greeting({not valid json"
+    mock_model.invoke.return_value = malformed_response
+
+    @tool
+    def get_greeting(name: str) -> str:
+        """Build a greeting for name."""
+        return f"Hi {name}"
+
+    ai = AIService(ai_config)
+    response = ai.invoke([("user", "hi")], tools=[get_greeting])
+
+    assert response == "TOOL_CALL: get_greeting({not valid json"
+
+
 def test_image_from_request_files_missing_returns_none():
     image_bytes, mime_type = image_from_request_files({})
 

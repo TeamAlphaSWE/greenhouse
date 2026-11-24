@@ -3,7 +3,7 @@ import requests
 
 from api_client import BACKEND_URL, auth_headers
 
-CHAT_TIMEOUT_SECONDS = 60
+CHAT_TIMEOUT_SECONDS = 300  # 5 minute timeout; as allocated for Rocky
 
 
 def ask(message, history):
