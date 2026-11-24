@@ -10,6 +10,9 @@ def app():
         "TESTING": True,
         "MONGO_CLIENT": mongomock.MongoClient(),
         "MONGO_DB_NAME": "greenhouse_test",
+        "AI_BASE_URL": None,
+        "AI_API_KEY": None,
+        "AI_MODEL": None,
     })
 
 
