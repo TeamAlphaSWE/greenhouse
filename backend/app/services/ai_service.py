@@ -79,7 +79,7 @@ class AIService:
             response = self._call_model(model, messages)
             tool_calls = getattr(response, "tool_calls", None)
             if not isinstance(tool_calls, list) or not tool_calls:
-                return response.text
+                return response.text()
 
             messages.append(response)
             for call in response.tool_calls:

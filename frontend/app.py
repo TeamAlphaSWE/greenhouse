@@ -8,6 +8,7 @@ login = st.Page("login.py", title="Login")
 landing=st.Page("views/landing.py", title="Home", default=True)
 sensors_page=st.Page("views/sensors.py", title="Sensors")
 alert=st.Page("views/alert.py", title="Alert")
+ask=st.Page("views/ask.py", title="Ask Sprout 🌱")
 settings=st.Page("views/settings.py", title="Settings")
 credits=st.Page("views/credits.py", title="Credits")
 zones=st.Page("views/zones.py", title="Zones")
@@ -20,7 +21,7 @@ if not st.session_state.get("logged_in", False):
     )
 else:
     nav = st.navigation(
-        [landing, sensors_page, zones, alert, settings, credits, change_pass]
+        [landing, sensors_page, zones, alert, ask, settings, credits, change_pass]
     )
     if "settings" not in st.session_state:
         try:

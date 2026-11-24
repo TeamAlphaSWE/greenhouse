@@ -42,7 +42,7 @@ def test_missing_configuration():
 @patch("app.services.ai_service.ChatOpenAI")
 def test_invoke_text_message(mock_chat_openai, ai_config):
     mock_model = mock_chat_openai.return_value
-    mock_model.invoke.return_value.text = "Hello Greenhouse"
+    mock_model.invoke.return_value.text.return_value = "Hello Greenhouse"
 
     ai = AIService(ai_config)
     response = ai.invoke([
@@ -56,7 +56,7 @@ def test_invoke_text_message(mock_chat_openai, ai_config):
 @patch("app.services.ai_service.ChatOpenAI")
 def test_invoke_image_message(mock_chat_openai, ai_config):
     mock_model = mock_chat_openai.return_value
-    mock_model.invoke.return_value.text = "Healthy plants"
+    mock_model.invoke.return_value.text.return_value = "Healthy plants"
 
     ai = AIService(ai_config)
 
@@ -130,7 +130,7 @@ def test_invoke_with_tools_calls_tool_and_returns_final_answer(mock_chat_openai,
     tool_call_response.tool_calls = [{"name": "get_greeting", "args": {"name": "Rocky"}, "id": "call_1"}]
     final_response = MagicMock()
     final_response.tool_calls = []
-    final_response.text = "Hello, Rocky!"
+    final_response.text.return_value = "Hello, Rocky!"
     bound_model.invoke.side_effect = [tool_call_response, final_response]
 
     @tool
@@ -158,7 +158,7 @@ def test_invoke_with_tools_reports_tool_failure_to_the_model(mock_chat_openai, a
     tool_call_response.tool_calls = [{"name": "broken_tool", "args": {}, "id": "call_1"}]
     final_response = MagicMock()
     final_response.tool_calls = []
-    final_response.text = "Sorry, I couldn't retrieve that."
+    final_response.text.return_value = "Sorry, I couldn't retrieve that."
     bound_model.invoke.side_effect = [tool_call_response, final_response]
 
     @tool
@@ -184,7 +184,7 @@ def test_invoke_with_tools_handles_unknown_tool_name(mock_chat_openai, ai_config
     tool_call_response.tool_calls = [{"name": "nonexistent", "args": {}, "id": "call_1"}]
     final_response = MagicMock()
     final_response.tool_calls = []
-    final_response.text = "I couldn't find that information."
+    final_response.text.return_value = "I couldn't find that information."
     bound_model.invoke.side_effect = [tool_call_response, final_response]
 
     @tool
