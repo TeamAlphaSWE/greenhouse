@@ -43,7 +43,7 @@ def test_login_wrong_password_shows_error():
 
     app = submit("alice", "wrong", post)
 
-    assert app.error[0].value == "Invalid email or password."
+    assert app.error[0].value == "Invalid username or password."
     assert "token" not in app.session_state
     assert app.session_state["logged_in"] is False
 
@@ -62,5 +62,5 @@ def test_login_backend_unreachable_shows_error():
 
     app = submit("alice", "secret", post)
 
-    assert app.error[0].value == "Unable to connect to the server."
+    assert app.error[0].value == "Could not connect to the login server."
     assert "token" not in app.session_state
