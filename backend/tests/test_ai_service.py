@@ -1,10 +1,13 @@
 from io import BytesIO
 from unittest.mock import MagicMock, patch
+import httpx
 import pytest
 from langchain_core.tools import tool
 from werkzeug.datastructures import FileStorage
 from app.services.ai_service import AIService, build_image_message, image_from_request_files
 from openai import APIConnectionError, APIStatusError, APITimeoutError
+
+FAKE_REQUEST = httpx.Request("POST", "http://localhost:1234/v1/responses")
 
 @pytest.fixture
 def ai_config():
@@ -85,7 +88,7 @@ def test_invoke_image_message(mock_chat_openai, ai_config):
 @patch("app.services.ai_service.ChatOpenAI")
 def test_invoke_timeout(mock_chat_openai, ai_config):
     mock_model = mock_chat_openai.return_value
-    mock_model.invoke.side_effect = APITimeoutError(request=None)
+    mock_model.invoke.side_effect = APITimeoutError(request=FAKE_REQUEST)
 
     ai = AIService(ai_config)
 
@@ -95,7 +98,7 @@ def test_invoke_timeout(mock_chat_openai, ai_config):
 @patch("app.services.ai_service.ChatOpenAI")
 def test_invoke_connection_error(mock_chat_openai, ai_config):
     mock_model = mock_chat_openai.return_value
-    mock_model.invoke.side_effect = APIConnectionError(request=None)
+    mock_model.invoke.side_effect = APIConnectionError(request=FAKE_REQUEST)
 
     ai = AIService(ai_config)
 
