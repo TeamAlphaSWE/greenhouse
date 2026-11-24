@@ -1,10 +1,13 @@
 from io import BytesIO
 from unittest.mock import MagicMock, patch
+import httpx
 import pytest
 from langchain_core.tools import tool
 from werkzeug.datastructures import FileStorage
 from app.services.ai_service import AIService, build_image_message, image_from_request_files
 from openai import APIConnectionError, APIStatusError, APITimeoutError
+
+FAKE_REQUEST = httpx.Request("POST", "http://localhost:1234/v1/responses")
 
 @pytest.fixture
 def ai_config():
@@ -42,7 +45,7 @@ def test_missing_configuration():
 @patch("app.services.ai_service.ChatOpenAI")
 def test_invoke_text_message(mock_chat_openai, ai_config):
     mock_model = mock_chat_openai.return_value
-    mock_model.invoke.return_value.text = "Hello Greenhouse"
+    mock_model.invoke.return_value.text.return_value = "Hello Greenhouse"
 
     ai = AIService(ai_config)
     response = ai.invoke([
@@ -56,7 +59,7 @@ def test_invoke_text_message(mock_chat_openai, ai_config):
 @patch("app.services.ai_service.ChatOpenAI")
 def test_invoke_image_message(mock_chat_openai, ai_config):
     mock_model = mock_chat_openai.return_value
-    mock_model.invoke.return_value.text = "Healthy plants"
+    mock_model.invoke.return_value.text.return_value = "Healthy plants"
 
     ai = AIService(ai_config)
 
@@ -85,7 +88,7 @@ def test_invoke_image_message(mock_chat_openai, ai_config):
 @patch("app.services.ai_service.ChatOpenAI")
 def test_invoke_timeout(mock_chat_openai, ai_config):
     mock_model = mock_chat_openai.return_value
-    mock_model.invoke.side_effect = APITimeoutError(request=None)
+    mock_model.invoke.side_effect = APITimeoutError(request=FAKE_REQUEST)
 
     ai = AIService(ai_config)
 
@@ -95,7 +98,7 @@ def test_invoke_timeout(mock_chat_openai, ai_config):
 @patch("app.services.ai_service.ChatOpenAI")
 def test_invoke_connection_error(mock_chat_openai, ai_config):
     mock_model = mock_chat_openai.return_value
-    mock_model.invoke.side_effect = APIConnectionError(request=None)
+    mock_model.invoke.side_effect = APIConnectionError(request=FAKE_REQUEST)
 
     ai = AIService(ai_config)
 
@@ -130,7 +133,7 @@ def test_invoke_with_tools_calls_tool_and_returns_final_answer(mock_chat_openai,
     tool_call_response.tool_calls = [{"name": "get_greeting", "args": {"name": "Rocky"}, "id": "call_1"}]
     final_response = MagicMock()
     final_response.tool_calls = []
-    final_response.text = "Hello, Rocky!"
+    final_response.text.return_value = "Hello, Rocky!"
     bound_model.invoke.side_effect = [tool_call_response, final_response]
 
     @tool
@@ -158,7 +161,7 @@ def test_invoke_with_tools_reports_tool_failure_to_the_model(mock_chat_openai, a
     tool_call_response.tool_calls = [{"name": "broken_tool", "args": {}, "id": "call_1"}]
     final_response = MagicMock()
     final_response.tool_calls = []
-    final_response.text = "Sorry, I couldn't retrieve that."
+    final_response.text.return_value = "Sorry, I couldn't retrieve that."
     bound_model.invoke.side_effect = [tool_call_response, final_response]
 
     @tool
@@ -184,7 +187,7 @@ def test_invoke_with_tools_handles_unknown_tool_name(mock_chat_openai, ai_config
     tool_call_response.tool_calls = [{"name": "nonexistent", "args": {}, "id": "call_1"}]
     final_response = MagicMock()
     final_response.tool_calls = []
-    final_response.text = "I couldn't find that information."
+    final_response.text.return_value = "I couldn't find that information."
     bound_model.invoke.side_effect = [tool_call_response, final_response]
 
     @tool
@@ -218,6 +221,130 @@ def test_invoke_with_tools_raises_after_max_rounds(mock_chat_openai, ai_config):
     ai = AIService(ai_config)
     with pytest.raises(RuntimeError, match="tool-call limit"):
         ai.invoke([("user", "hi")], tools=[get_greeting])
+
+
+def unsupported_tools_error():
+    return APIStatusError(
+        "Parameter 'tools' is not supported.",
+        response=MagicMock(status_code=400),
+        body={
+            "code": "unsupported_parameter",
+            "message": "Parameter 'tools' is not supported.",
+            "param": "tools",
+            "type": "invalid_request_error",
+        },
+    )
+
+
+def test_tool_instructions_include_full_multiline_description():
+    @tool
+    def get_sensor_status(sensor_name: str = "") -> str:
+        """Get sensor reporting status, battery level, and last-seen time.
+
+        Pass sensor_name to look up one sensor, or leave it empty for all sensors.
+        """
+        return "[]"
+
+    instructions = AIService._with_tool_instructions([], [get_sensor_status])[0].content
+
+    # Regression: a previous version only kept the docstring's first line,
+    # silently dropping usage guidance a weaker model actually needs (Rocky
+    # refused to list all sensors because it never saw this line).
+    assert "leave it empty for all sensors" in instructions
+
+
+@patch("app.services.ai_service.ChatOpenAI")
+def test_invoke_falls_back_to_prompted_tools_when_native_tools_unsupported(mock_chat_openai, ai_config):
+    mock_model = mock_chat_openai.return_value
+    bound_model = mock_model.bind_tools.return_value
+    bound_model.invoke.side_effect = unsupported_tools_error()
+
+    tool_call_response = MagicMock()
+    tool_call_response.text.return_value = 'TOOL_CALL: get_greeting({"name": "Rocky"})'
+    final_response = MagicMock()
+    final_response.text.return_value = "Hello, Rocky!"
+    mock_model.invoke.side_effect = [tool_call_response, final_response]
+
+    @tool
+    def get_greeting(name: str) -> str:
+        """Build a greeting for name."""
+        return f"Hi {name}"
+
+    ai = AIService(ai_config)
+    response = ai.invoke([("user", "greet Rocky")], tools=[get_greeting])
+
+    assert response == "Hello, Rocky!"
+    mock_model.bind_tools.assert_called_once_with([get_greeting])
+    assert mock_model.invoke.call_count == 2
+
+    first_prompt = mock_model.invoke.call_args_list[0].args[0]
+    assert "get_greeting" in first_prompt[0].content  # prepended tool-instructions SystemMessage
+
+    second_prompt = mock_model.invoke.call_args_list[1].args[0]
+    assert "Hi Rocky" in second_prompt[-1].content  # appended TOOL_RESULT message
+
+
+@patch("app.services.ai_service.ChatOpenAI")
+def test_invoke_does_not_fall_back_for_unrelated_status_errors_with_tools(mock_chat_openai, ai_config):
+    mock_model = mock_chat_openai.return_value
+    bound_model = mock_model.bind_tools.return_value
+    bound_model.invoke.side_effect = APIStatusError(
+        "Rate limited",
+        response=MagicMock(status_code=429),
+        body={"code": "rate_limit_exceeded", "message": "slow down", "param": None, "type": "requests"},
+    )
+
+    @tool
+    def get_greeting(name: str) -> str:
+        """Build a greeting for name."""
+        return f"Hi {name}"
+
+    ai = AIService(ai_config)
+    with pytest.raises(RuntimeError, match="LLM provider returned status 429"):
+        ai.invoke([("user", "hi")], tools=[get_greeting])
+
+    mock_model.invoke.assert_not_called()
+
+
+@patch("app.services.ai_service.ChatOpenAI")
+def test_prompted_tools_raises_after_max_rounds(mock_chat_openai, ai_config):
+    mock_model = mock_chat_openai.return_value
+    bound_model = mock_model.bind_tools.return_value
+    bound_model.invoke.side_effect = unsupported_tools_error()
+
+    looping_response = MagicMock()
+    looping_response.text.return_value = 'TOOL_CALL: get_greeting({"name": "Rocky"})'
+    mock_model.invoke.return_value = looping_response
+
+    @tool
+    def get_greeting(name: str) -> str:
+        """Build a greeting for name."""
+        return f"Hi {name}"
+
+    ai = AIService(ai_config)
+    with pytest.raises(RuntimeError, match="tool-call limit"):
+        ai.invoke([("user", "hi")], tools=[get_greeting])
+
+
+@patch("app.services.ai_service.ChatOpenAI")
+def test_prompted_tools_returns_raw_text_on_malformed_tool_call(mock_chat_openai, ai_config):
+    mock_model = mock_chat_openai.return_value
+    bound_model = mock_model.bind_tools.return_value
+    bound_model.invoke.side_effect = unsupported_tools_error()
+
+    malformed_response = MagicMock()
+    malformed_response.text.return_value = "TOOL_CALL: get_greeting({not valid json"
+    mock_model.invoke.return_value = malformed_response
+
+    @tool
+    def get_greeting(name: str) -> str:
+        """Build a greeting for name."""
+        return f"Hi {name}"
+
+    ai = AIService(ai_config)
+    response = ai.invoke([("user", "hi")], tools=[get_greeting])
+
+    assert response == "TOOL_CALL: get_greeting({not valid json"
 
 
 def test_image_from_request_files_missing_returns_none():
