@@ -7,12 +7,17 @@ latest temperature reading against the area's configured limits.
 """
 from __future__ import annotations
 
+from app.sensor_health import is_stale, minutes_since
 
-def area_status(area, latest):
-    """One area's status: {"normal", "out_of_range", "offline_unknown"}.
+
+def area_status(area, latest, config=None, now=None):
+    """One area's status: {"normal", "out_of_range", "warning", "offline_unknown"}.
 
     latest is the sensor's latest sensor_data reading (or None if the area has
-    no sensor assigned, or that sensor has never reported).
+    no sensor assigned, or that sensor has never reported). config/now are
+    needed to tell a stale reading from a fresh one, the same way
+    sensor_health.py does; without config, staleness can't be checked, so an
+    in-range stale reading just reads as "normal" (unchanged old behavior).
     """
     temperature = humidity = None
     if latest:
@@ -29,6 +34,8 @@ def area_status(area, latest):
         state = "offline_unknown"
     elif temperature < low or temperature > high:
         state = "out_of_range"
+    elif config is not None and is_stale(minutes_since(latest["timestamp"], now), config):
+        state = "warning"
     else:
         state = "normal"
 
@@ -43,14 +50,14 @@ def area_status(area, latest):
     }
 
 
-def build_overview(zones, latest_by_area):
+def build_overview(zones, latest_by_area, config=None, now=None):
     """zones: GET /api/v1/zones shape. latest_by_area: {area_id: latest reading}."""
     return [
         {
             "id": zone["id"],
             "name": zone.get("name"),
             "areas": [
-                area_status(area, latest_by_area.get(area["id"]))
+                area_status(area, latest_by_area.get(area["id"]), config, now)
                 for area in zone.get("areas", [])
             ],
         }
@@ -64,5 +71,6 @@ def summarize(overview):
         "total": len(all_areas),
         "normal": sum(a["state"] == "normal" for a in all_areas),
         "out_of_range": sum(a["state"] == "out_of_range" for a in all_areas),
+        "warning": sum(a["state"] == "warning" for a in all_areas),
         "offline_unknown": sum(a["state"] == "offline_unknown" for a in all_areas),
     }

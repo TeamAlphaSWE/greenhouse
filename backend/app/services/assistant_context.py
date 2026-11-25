@@ -17,7 +17,7 @@ from app.sensor_health import sensor_health
 RECENT_HISTORY_HOURS = 24
 
 
-def current_conditions(area_name=None):
+def current_conditions(area_name=None, config=None):
     """Current temperature/humidity vs. target for every area, or one area by name."""
     zone_list = zone_repository.find(sort=[("name", 1)])
     sensor_list = sensor_repository.find()
@@ -27,9 +27,10 @@ def current_conditions(area_name=None):
     )
     latest_by_area = {s["area_id"]: latest.get(s["id"]) for s in assigned}
 
+    now = datetime.now(timezone.utc)
     areas = [
         {"zone": zone.get("name"), **area}
-        for zone in build_overview(zone_list, latest_by_area)
+        for zone in build_overview(zone_list, latest_by_area, config, now)
         for area in zone["areas"]
     ]
     if area_name:

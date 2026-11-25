@@ -2,26 +2,38 @@
 from datetime import datetime, timezone
 
 
+def minutes_since(last_seen, now=None):
+    """Minutes between last_seen and now, or None if last_seen is None."""
+    if last_seen is None:
+        return None
+    now = now or datetime.now(timezone.utc)
+    if last_seen.tzinfo is None:
+        last_seen = last_seen.replace(tzinfo=timezone.utc)
+    return int((now - last_seen).total_seconds() // 60)
+
+
+def is_stale(minutes_ago, config):
+    """Shared staleness threshold: shared with area_overview.py's area_status()
+    so the map and the Sensors page agree on what counts as stale."""
+    stale_after = config["SENSOR_REPORT_INTERVAL_MINUTES"] * config["SENSOR_STALE_FACTOR"]
+    return minutes_ago is not None and minutes_ago > stale_after
+
+
 def sensor_health(sensor, latest, config, now=None):
     now = now or datetime.now(timezone.utc)
 
     last_seen = latest["timestamp"] if latest else None
     if last_seen is not None and last_seen.tzinfo is None:
         last_seen = last_seen.replace(tzinfo=timezone.utc)
-
-    if last_seen is None:
-        state, minutes_ago = "no_data", None
-    else:
-        state = "reporting"
-        minutes_ago = int((now - last_seen).total_seconds() // 60)
+    minutes_ago = minutes_since(last_seen, now)
+    state = "no_data" if last_seen is None else "reporting"
 
     battery = None
     for value in (latest or {}).get("values", []):
         if value.get("type") == "battery":
             battery = value.get("value")
 
-    stale_after = config["SENSOR_REPORT_INTERVAL_MINUTES"] * config["SENSOR_STALE_FACTOR"]
-    stale = minutes_ago is not None and minutes_ago > stale_after
+    stale = is_stale(minutes_ago, config)
     low_battery = battery is not None and battery < config["LOW_BATTERY_PERCENT"]
 
     if stale or low_battery:
