@@ -1,3 +1,5 @@
+from datetime import datetime, timezone
+
 from flask import Blueprint, current_app, jsonify, request
 from pymongo.errors import PyMongoError
 
@@ -22,7 +24,7 @@ def areas_overview():
         return jsonify({"error": "Unexpected server error"}), 500
 
     latest_by_area = {s["area_id"]: latest.get(s["id"]) for s in sensor_list}
-    overview = build_overview(zone_list, latest_by_area)
+    overview = build_overview(zone_list, latest_by_area, current_app.config, datetime.now(timezone.utc))
 
     return jsonify({
         "zones": overview,

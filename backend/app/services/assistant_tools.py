@@ -19,7 +19,7 @@ def get_current_conditions(area_name: str = "") -> str:
     Pass area_name to look up one area (e.g. "Tomatoes"), or leave it empty
     to get every area's current conditions.
     """
-    areas = context.current_conditions(area_name or None)
+    areas = context.current_conditions(area_name or None, current_app.config)
     if not areas:
         return f"No area found matching '{area_name}'." if area_name else "No areas configured."
     return json.dumps(areas, default=str)

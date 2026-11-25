@@ -83,6 +83,19 @@ def test_current_conditions_handles_area_with_no_sensor(app):
     assert areas[0]["temperature"] is None
 
 
+def test_current_conditions_shows_warning_for_stale_in_range_reading(app):
+    area_id = ObjectId()
+    seed_zone_with_area(app, area_id)
+    sensor_id = seed_sensor(app, area_id=area_id)
+    seed_reading(app, sensor_id, datetime.now(timezone.utc) - timedelta(minutes=241), temperature=22.0)
+
+    with app.app_context():
+        from flask import current_app
+        areas = current_conditions(config=current_app.config)
+
+    assert areas[0]["state"] == "warning"
+
+
 def test_sensor_status_filters_by_name(app):
     seed_sensor(app, name="Sensor A")
     seed_sensor(app, name="Sensor B")

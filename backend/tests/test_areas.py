@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 
 from bson import ObjectId
 from pymongo.errors import PyMongoError
@@ -31,6 +31,26 @@ def stored_areas(app, zone_id):
     with app.app_context():
         doc = get_collection("zones").find_one({"_id": zone_id})
     return {a["name"]: a for a in doc["areas"]}, doc
+
+
+def test_areas_overview_shows_warning_for_stale_in_range_sensor(app, client):
+    zone_id, tomatoes, _ = seed_zone(app)
+    app.config["SENSOR_REPORT_INTERVAL_MINUTES"] = 5
+    app.config["SENSOR_STALE_FACTOR"] = 2
+    with app.app_context():
+        sensor_id = get_collection("sensors").insert_one(
+            {"name": "A", "hardware_id": "a", "area_id": tomatoes}
+        ).inserted_id
+        get_collection("sensor_data").insert_one({
+            "sensor_id": sensor_id,
+            "timestamp": datetime.now(timezone.utc) - timedelta(minutes=11),
+            "values": [{"type": "temperature", "value": 22}],
+        })
+
+    body = client.get("/api/v1/areas/overview").get_json()
+
+    areas = {a["name"]: a for zone in body["zones"] for a in zone["areas"]}
+    assert areas["Tomatoes"]["state"] == "warning"
 
 
 def test_update_target_conditions_sets_both_measurements(app, client):

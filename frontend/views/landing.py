@@ -57,6 +57,7 @@ def filter_history(frame, start=None, end=None):
 STATUS_DISPLAY = {
     "normal": {"icon": "✓", "label": "In range", "dot": "#2e7d32", "badge": "green"},
     "out_of_range": {"icon": "⚠", "label": "Alert", "dot": "#d32f2f", "badge": "gray"},
+    "warning": {"icon": "⚠", "label": "Warning", "dot": "#f9a825", "badge": "yellow"},
     "offline_unknown": {"icon": "?", "label": "Offline/Unknown", "dot": "#808080", "badge": "gray"},
 }
 NO_SENSOR_DISPLAY = {"label": "No sensor", "dot": "#668675"}
@@ -67,7 +68,7 @@ def area_kpis(summary):
     return (
         summary.get("total", 0),
         summary.get("normal", 0),
-        summary.get("out_of_range", 0) + summary.get("offline_unknown", 0),
+        summary.get("out_of_range", 0) + summary.get("warning", 0) + summary.get("offline_unknown", 0),
     )
 
 
@@ -120,9 +121,9 @@ def region_svg(region, areas_with_sensor, areas_by_id, unit, selected_area_id, v
     else:
         _, area = areas_by_id.get(area_id, (None, None))
         state = area["state"] if area else "offline_unknown"
-        color = {"out_of_range": "#d32f2f", "offline_unknown": "#808080"}.get(state, "#2e7d32")
-        base_opacity = {"out_of_range": 0.2, "offline_unknown": 0.12}.get(state, 0.15)
-        selected_opacity = {"out_of_range": 0.45, "offline_unknown": 0.35}.get(state, 0.4)
+        color = {"out_of_range": "#d32f2f", "warning": "#f9a825", "offline_unknown": "#808080"}.get(state, "#2e7d32")
+        base_opacity = {"out_of_range": 0.2, "warning": 0.2, "offline_unknown": 0.12}.get(state, 0.15)
+        selected_opacity = {"out_of_range": 0.45, "warning": 0.45, "offline_unknown": 0.35}.get(state, 0.4)
         opacity = selected_opacity if selected else base_opacity
         tooltip = STATUS_DISPLAY[state]["label"]
         temperature = to_display(area.get("temperature"), unit) if area else None
@@ -420,6 +421,7 @@ def update_dashboard():
                             area_id = clicked["areaId"]
                             st.session_state["selected_area_id"] = area_id
                             st.session_state["trend_sensor"] = area_to_sensor.get(area_id)
+                            st.session_state["_area_selected_via_map"] = True
                             st.rerun()
 
             selected_area_id = st.session_state.get("selected_area_id")
@@ -432,6 +434,9 @@ def update_dashboard():
                     )
             elif selected_area:
                 status = STATUS_DISPLAY[selected_area["state"]]
+                is_warning = selected_area["state"] == "warning"
+                status_label = "Warning - stale" if is_warning else status["label"]
+                status_style = " style='background:#fff3cd;color:#664d03;'" if is_warning else ""
                 temperature = to_display(selected_area["temperature"], unit)
                 low = to_display(selected_area["temperature_min"], unit)
                 high = to_display(selected_area["temperature_max"], unit)
@@ -476,7 +481,7 @@ def update_dashboard():
                             "<div class='area-title-row'>"
                             f"<span class='area-name'>{zone.get('name') or 'Unassigned'} - "
                             f"{selected_area.get('name') or 'Unnamed'}</span>"
-                            f"<span class='area-status'>{status['label']}</span>"
+                            f"<span class='area-status'{status_style}>{status_label}</span>"
                             "</div>"
                             f"<div class='area-last-seen'>{last_seen_text}</div>"
                             "</div>",
@@ -523,7 +528,12 @@ def update_dashboard():
     # Get the area ID associated with the selected sensor, if any.
     selected_area_id = sensor_to_area.get(str(selected_id)) if selected_id is not None else None
     current_area_id = st.session_state.get("selected_area_id")
-    if (
+    # Skip this reconciliation right after a map click: the sensor picker may have
+    # just reset to its default (no sensor matches a no-sensor area), which isn't
+    # a real sensor change and shouldn't bounce the area selection back.
+    if st.session_state.pop("_area_selected_via_map", False):
+        pass
+    elif (
         (str(current_area_id) if current_area_id is not None else None)
         != (str(selected_area_id) if selected_area_id is not None else None)
     ):
