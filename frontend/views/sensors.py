@@ -20,7 +20,69 @@ st.set_page_config(
     layout="wide"
 )
 
-page_header("Sensors")
+page_header("Sensors", "Monitor your greenhouse sensors.")
+
+st.markdown("""
+<style>
+html, body, .stApp, [data-testid="stAppViewContainer"], [data-testid="stMain"],
+[data-testid="stMainBlockContainer"] {
+    background: #F6F7EF !important;
+}
+[data-testid="stMain"] * {
+    color: #18372A !important;
+}
+[data-testid="stMain"] .gh-page-hero h1 {
+    color: #fffdf4 !important;
+}
+[data-testid="stMain"] .gh-page-hero .gh-page-sub {
+    color: #d4af37 !important;
+}
+.st-key-temperature_chart,
+.st-key-humidity_chart,
+.st-key-battery_chart {
+    background: #fff;
+    border: 1px solid #dce4d6;
+    border-radius: 18px;
+    padding: 20px;
+}
+.st-key-all_sensors_section,
+.st-key-sensor_health_section,
+.st-key-sensor_details_section {
+    background: #DCE4D6;
+    border: 1px solid #DCE4D6;
+    border-radius: 12px;
+    padding: 1.25rem;
+    margin-bottom: 1rem;
+}
+.st-key-sensor_health_section {
+    background: #DCE4D6;
+}
+.st-key-sensor_health_section * {
+    color: #18372A !important;
+}
+.st-key-sensor_page_sensor_selector [data-baseweb="select"] > div {
+    background: #123d2d !important;
+    border-color: #123d2d !important;
+}
+.st-key-sensor_page_sensor_selector [data-baseweb="select"] *,
+[role="listbox"] [role="option"],
+[role="listbox"] [role="option"] * {
+    color: #fff !important;
+    -webkit-text-fill-color: #fff !important;
+}
+[role="listbox"] [role="option"] {
+    background: #123d2d !important;
+}
+.st-key-sensor_page_date_range [data-baseweb="input"] > div {
+    background: #123d2d !important;
+    border-color: #123d2d !important;
+}
+.st-key-sensor_page_date_range input {
+    color: #fff !important;
+    -webkit-text-fill-color: #fff !important;
+}
+</style>
+""", unsafe_allow_html=True)
 
 unit = temperature_unit()
 
@@ -198,21 +260,23 @@ if not sensors:
 
 # -------------------- Sensors list --------------------
 
-st.subheader("All sensors")
-for s in sensors:
-    row = st.columns([3, 2, 2])
-    row[0].write(s.get("name") or s["hardware_id"])
-    if s.get("status") == "pending":
-        row[1].badge("Pending", color="orange")
-        if row[2].button("Activate", key=f"activate-{s['id']}"):
-            st.session_state["activating_sensor_id"] = s["id"]
-            st.rerun()
-    else:
-        row[1].badge("Active", color="green")
+with st.container(key="all_sensors_section"):
+    st.subheader("All sensors")
+    for s in sensors:
+        row = st.columns([3, 2, 2])
+        row[0].write(s.get("name") or s["hardware_id"])
+        if s.get("status") == "pending":
+            row[1].badge("Pending", color="orange")
+            if row[2].button("Activate", key=f"activate-{s['id']}"):
+                st.session_state["activating_sensor_id"] = s["id"]
+                st.rerun()
+        else:
+            row[1].badge("Active", color="green")
 
 st.divider()
 
-show_sensor_health(sensors)
+with st.container(key="sensor_health_section"):
+    show_sensor_health(sensors)
 
 st.divider()
 
@@ -221,6 +285,7 @@ sensor_id = st.selectbox(
     "Sensor",
     options=list(sensor_names),
     format_func=lambda sid: sensor_names[sid],
+    key="sensor_page_sensor_selector",
 )
 sensor = next(s for s in sensors if s["id"] == sensor_id)
 
@@ -232,19 +297,20 @@ except requests.RequestException:
 
 # -------------------- Sensor details --------------------
 
-st.subheader("Sensor details")
-latest = data.iloc[-1] if not data.empty else None
+with st.container(key="sensor_details_section"):
+    st.subheader("Sensor details")
+    latest = data.iloc[-1] if not data.empty else None
 
-col1, col2, col3 = st.columns(3)
-col1.metric("Temperature", show(None if latest is None else to_display(latest["temperature"], unit), f" {unit}"))
-col2.metric("Humidity", show(None if latest is None else latest["humidity"], " %"))
-col3.metric("Battery", show(None if latest is None else latest["battery"], " %"))
+    col1, col2, col3 = st.columns(3)
+    col1.metric("Temperature", show(None if latest is None else to_display(latest["temperature"], unit), f" {unit}"))
+    col2.metric("Humidity", show(None if latest is None else latest["humidity"], " %"))
+    col3.metric("Battery", show(None if latest is None else latest["battery"], " %"))
 
-last_seen = "never" if latest is None else to_local(latest["Date"]).strftime("%Y-%m-%d %H:%M %Z")
-st.write(f"**Zone:** {zone_names.get(sensor.get('zone_id'), 'Unassigned')}")
-st.write(f"**Status:** {sensor.get('status', 'unknown')}")
-st.write(f"**Hardware ID:** {sensor.get('hardware_id', '—')}")
-st.write(f"**Last reading:** {last_seen}")
+    last_seen = "never" if latest is None else to_local(latest["Date"]).strftime("%Y-%m-%d %H:%M %Z")
+    st.write(f"**Zone:** {zone_names.get(sensor.get('zone_id'), 'Unassigned')}")
+    st.write(f"**Status:** {sensor.get('status', 'unknown')}")
+    st.write(f"**Hardware ID:** {sensor.get('hardware_id', '—')}")
+    st.write(f"**Last reading:** {last_seen}")
 
 # -------------------- Charts --------------------
 
@@ -258,6 +324,7 @@ date_range = st.date_input(
     value=(first_day, last_day),
     min_value=first_day,
     max_value=last_day,
+    key="sensor_page_date_range",
 )
 if len(date_range) == 2:
     start, end = date_range
@@ -265,9 +332,29 @@ if len(date_range) == 2:
 
 data = data.assign(temperature=to_display(data["temperature"], unit))
 
-st.subheader(f"Temperature ({unit})")
-st.altair_chart(time_series_chart(data, ["temperature"]), use_container_width=True)
-st.subheader("Humidity (%)")
-st.altair_chart(time_series_chart(data, ["humidity"]), use_container_width=True)
-st.subheader("Battery (%)")
-st.line_chart(data, x="Date", y="battery")
+with st.container(key="temperature_chart"):
+    st.subheader(f"Temperature ({unit})")
+    st.altair_chart(
+        time_series_chart(data, ["temperature"], colors=["#28734f"])
+        .properties(background="#fff")
+        .configure_axis(labelColor="#000", titleColor="#000"),
+        use_container_width=True,
+    )
+
+with st.container(key="humidity_chart"):
+    st.subheader("Humidity (%)")
+    st.altair_chart(
+        time_series_chart(data, ["humidity"], colors=["#91b44c"])
+        .properties(background="#fff")
+        .configure_axis(labelColor="#000", titleColor="#000"),
+        use_container_width=True,
+    )
+
+with st.container(key="battery_chart"):
+    st.subheader("Battery (%)")
+    st.altair_chart(
+        time_series_chart(data, ["battery"], colors=["#28734f"])
+        .properties(background="#fff")
+        .configure_axis(labelColor="#000", titleColor="#000"),
+        use_container_width=True,
+    )

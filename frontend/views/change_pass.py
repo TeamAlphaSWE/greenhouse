@@ -1,25 +1,79 @@
 
 import streamlit as st
 import requests
+from theme import page_header
 
 def change_pass():
 
-    st.title("Change Password")
+    page_header("Change Password", "Update your account password.")
 
-    current_password = st.text_input(
-        "Current Password",
-        type="password"
+    st.set_page_config(
+        page_title="Privacy | Greenhouse",
+        page_icon="🌱",
+        layout="wide"
     )
 
-    new_password = st.text_input(
-        "New Password",
-        type="password"
-    )
+    st.markdown("""
+    <style>
+    html, body, .stApp, [data-testid="stAppViewContainer"], [data-testid="stMain"],
+    [data-testid="stMainBlockContainer"] {
+        background: #f6f7ef !important;
+    }
+    [data-testid="stMain"] * {
+        color: #18372A !important;
+    }
+    [data-testid="stMain"] .gh-page-hero h1 {
+        color: #fffdf4 !important;
+    }
+    [data-testid="stMain"] .gh-page-hero .gh-page-sub {
+        color: #d4af37 !important;
+    }
+    [data-testid="stMain"] button {
+        background: #123d2d !important;
+        border-color: #123d2d !important;
+    }
+    [data-testid="stMain"] button,
+    [data-testid="stMain"] button * {
+        color: #fffdf4 !important;
+        -webkit-text-fill-color: #fffdf4 !important;
+    }
+    [data-testid="stMain"] [data-baseweb="input"] > div {
+        background: #123d2d !important;
+        border-color: #123d2d !important;
+    }
+    [data-testid="stMain"] input[type="password"],
+    [data-testid="stMain"] input[type="text"] {
+        background: transparent !important;
+        color: #fffdf4 !important;
+        -webkit-text-fill-color: #fffdf4 !important;
+    }
+    .st-key-password_fields {
+        background: #DCE4D6;
+        border: 1px solid #DCE4D6;
+        border-radius: 12px;
+        padding: 1.25rem;
+    }
+    </style>
+    """, unsafe_allow_html=True)
 
-    confirm_password = st.text_input(
-        "Confirm New Password",
-        type="password"
-    )
+    if st.button("←", help="Back to Settings"):
+            st.switch_page("views/settings.py")
+
+    with st.container(key="password_fields"):
+        current_password = st.text_input(
+            "Current Password",
+            type="password"
+        )
+
+        new_password = st.text_input(
+            "New Password",
+            type="password"
+        )
+
+        confirm_password = st.text_input(
+            "Confirm New Password",
+            type="password"
+        )
 
     if st.button("Update Password"):
 

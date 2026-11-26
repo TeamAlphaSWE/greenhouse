@@ -26,6 +26,10 @@ CONTRIBUTORS = (
 
 CSS = """
 <style>
+html, body, .stApp, [data-testid="stAppViewContainer"], [data-testid="stMain"],
+[data-testid="stMainBlockContainer"] {
+    background: #f6f7ef !important;
+}
 .gh-credits { max-width: 1080px; margin: 0 auto; font-family: inherit; }
 .gh-credits * { box-sizing: border-box; }
 .gh-credits .hero { background: #123d2d; color: #fffdf4;
@@ -39,8 +43,8 @@ CSS = """
 .gh-credits .tags { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 30px; }
 .gh-credits .tag { border: 1px solid #668675; border-radius: 30px;
     padding: 7px 14px; color: #f0f7e9; font-size: 13px; }
-.gh-credits .team { background: #f6f7ef; color: #18372a; border-radius: 24px;
-    padding: clamp(24px, 4vw, 42px); margin-top: 20px; }
+.gh-credits .team { background: #f6f7ef; color: #18372a; border: 3px solid #dce4d6;
+    border-radius: 24px; padding: clamp(24px, 4vw, 42px); margin-top: 20px; }
 .gh-credits .section-head { display: flex; align-items: baseline;
     justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-bottom: 24px; }
 .gh-credits h2 { color: #18372a; margin: 0; padding: 0; font-size: 27px; }

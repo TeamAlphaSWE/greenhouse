@@ -14,7 +14,15 @@ from charts import time_series_chart
 from components.area_map import area_map
 from theme import inject_sidebar
 from units import fmt, temperature_unit, to_display, to_local, viewer_timezone
-
+#----------------------
+# Page Brand Colors Please Keep
+# Dark green: #123D2D
+# Cream: #FFFDF4
+# Gold: #D4AF37
+# Background Color: #F6F7EF (Lighter Green)
+# Text: #18372A (Deep Green)
+# Border: #DCE4D6 (Light Green)
+#-----------------------
 st.set_page_config(
     page_title="Home | Greenhouse",
     page_icon="🌱",

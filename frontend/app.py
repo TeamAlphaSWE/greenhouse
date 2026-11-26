@@ -12,7 +12,7 @@ ask=st.Page("views/ask.py", title="Ask Sprout 🌱")
 settings=st.Page("views/settings.py", title="Settings")
 credits=st.Page("views/credits.py", title="Credits")
 zones=st.Page("views/zones.py", title="Zones")
-change_pass=st.Page("views/change_pass.py", title="change password")
+change_password=st.Page("views/change_pass.py")
 
 if not st.session_state.get("logged_in", False):
     nav = st.navigation(
@@ -20,9 +20,15 @@ if not st.session_state.get("logged_in", False):
         position="hidden"
     )
 else:
+    visible_pages = [landing, sensors_page, zones, alert, ask, settings, credits]
     nav = st.navigation(
-        [landing, sensors_page, zones, alert, ask, settings, credits, change_pass]
+        [*visible_pages, change_password],
+        position="hidden"
     )
+    with st.sidebar:
+        for page in visible_pages:
+            st.page_link(page)
+
     if "settings" not in st.session_state:
         try:
             st.session_state["settings"] = get_settings()

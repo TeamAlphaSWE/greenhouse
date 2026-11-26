@@ -10,7 +10,7 @@ st.set_page_config(
     layout="wide"
 )
 
-page_header("Zones")
+page_header("Zones", "Monitor your greenhouse zones.")
 
 @st.fragment(run_every = "10s") # refresh page once every 10 seconds
 def update_dashboard():
