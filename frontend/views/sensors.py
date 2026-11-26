@@ -48,14 +48,35 @@ html, body, .stApp, [data-testid="stAppViewContainer"], [data-testid="stMain"],
 .st-key-all_sensors_section,
 .st-key-sensor_health_section,
 .st-key-sensor_details_section {
-    background: #DCE4D6;
-    border: 1px solid #DCE4D6;
+    background: #FFFDF4;
+    border: 1px solid #123D2D;
     border-radius: 12px;
-    padding: 1.25rem;
-    margin-bottom: 1rem;
+    padding: 1rem;
+    margin-bottom: 0.5rem;
+}
+[data-testid="stMain"] hr {
+    margin: 0.5rem 0 !important;
 }
 .st-key-sensor_health_section {
-    background: #DCE4D6;
+    background: #FFFDF4;
+}
+.st-key-all_sensors_section [data-testid="stHeading"],
+.st-key-sensor_health_section [data-testid="stHeading"],
+.st-key-sensor_details_section [data-testid="stHeading"] {
+    letter-spacing: 2px;
+}
+.st-key-all_sensors_section [data-testid="stHeading"] h3,
+.st-key-sensor_health_section [data-testid="stHeading"] h3,
+.st-key-sensor_details_section [data-testid="stHeading"] h3 {
+    text-decoration: underline;
+    text-decoration-color: #18372A;
+    text-underline-offset: 4px;
+}
+.st-key-all_sensors_section [data-testid="stHeading"] *,
+.st-key-sensor_health_section [data-testid="stHeading"] *,
+.st-key-sensor_details_section [data-testid="stHeading"] * {
+    color: #18372A !important;
+    -webkit-text-fill-color: #18372A !important;
 }
 .st-key-sensor_health_section * {
     color: #18372A !important;
@@ -113,7 +134,7 @@ def health_problems(sensor):
 
 
 def show_sensor_health(sensors):
-    st.subheader("Sensor health")
+    st.subheader("Sensor Health")
     try:
         health = get_sensor_health()
     except requests.RequestException:
@@ -261,7 +282,7 @@ if not sensors:
 # -------------------- Sensors list --------------------
 
 with st.container(key="all_sensors_section"):
-    st.subheader("All sensors")
+    st.subheader("All Sensors")
     for s in sensors:
         row = st.columns([3, 2, 2])
         row[0].write(s.get("name") or s["hardware_id"])
@@ -298,7 +319,7 @@ except requests.RequestException:
 # -------------------- Sensor details --------------------
 
 with st.container(key="sensor_details_section"):
-    st.subheader("Sensor details")
+    st.subheader("Sensor Details")
     latest = data.iloc[-1] if not data.empty else None
 
     col1, col2, col3 = st.columns(3)

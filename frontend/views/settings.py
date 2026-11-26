@@ -50,13 +50,13 @@ html, body, .stApp, [data-testid="stAppViewContainer"], [data-testid="stMain"],
     -webkit-text-fill-color: #fffdf4 !important;
 }
 .st-key-alerts_section [data-baseweb="input"] > div {
-    background: #123d2d !important;
-    border-color: #123d2d !important;
+    background: #FFFDF4 !important;
+    border-color: #FFFDF4 !important;
 }
 .st-key-alerts_section input[type="text"] {
     background: transparent !important;
-    color: #fffdf4 !important;
-    -webkit-text-fill-color: #fffdf4 !important;
+    color: #000000 !important;
+    -webkit-text-fill-color: #000000 !important;
 }
 </style>
 """, unsafe_allow_html=True)

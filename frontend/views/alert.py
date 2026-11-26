@@ -31,6 +31,12 @@ html, body, .stApp, [data-testid="stAppViewContainer"], [data-testid="stMain"],
 [data-testid="stMain"] .gh-page-hero .gh-page-sub {
     color: #d4af37 !important;
 }
+.gh-page-hero {
+    margin-bottom: 8px !important;
+}
+[data-testid="stMain"] hr {
+    margin: 0.25rem 0 !important;
+}
 .st-key-alert_summary_section,
 .st-key-recent_alerts_section {
     background: #DCE4D6;
@@ -41,10 +47,22 @@ html, body, .stApp, [data-testid="stAppViewContainer"], [data-testid="stMain"],
 }
 .st-key-recent_alerts_section {
     background: #FFFDF4;
+    border: 1px solid #123D2D;
+    border-radius: 12px;
 }
-[class*="st-key-unknown_temperature_alert_"],
+.st-key-alert_summary_section {
+    background: #FFFDF4;
+    border: 1px solid #123D2D;
+    border-radius: 12px;
+}
+[class*="st-key-recent_alert_"],
+[class*="st-key-unknown_temperature_alert_"] {
+    background: #FFF3CD !important;
+}
+[class*="st-key-recent_alert_"] [data-testid="stVerticalBlockBorderWrapper"],
 [class*="st-key-unknown_temperature_alert_"] [data-testid="stVerticalBlockBorderWrapper"] {
-    background: #DCE4D6 !important;
+    background: #FFF3CD !important;
+    border: 2px solid #D4AF37 !important;
 }
 </style>
 """, unsafe_allow_html=True)

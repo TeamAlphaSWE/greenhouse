@@ -37,15 +37,23 @@ def change_pass():
         color: #fffdf4 !important;
         -webkit-text-fill-color: #fffdf4 !important;
     }
-    [data-testid="stMain"] [data-baseweb="input"] > div {
-        background: #123d2d !important;
-        border-color: #123d2d !important;
+    .st-key-password_fields [data-baseweb="input"] > div {
+        background: #FFFDF4 !important;
+        border-color: #FFFDF4 !important;
     }
-    [data-testid="stMain"] input[type="password"],
-    [data-testid="stMain"] input[type="text"] {
+    .st-key-password_fields input[type="password"] {
         background: transparent !important;
-        color: #fffdf4 !important;
-        -webkit-text-fill-color: #fffdf4 !important;
+        color: #000000 !important;
+        -webkit-text-fill-color: #000000 !important;
+    }
+    .st-key-password_fields [data-baseweb="input"] button {
+        background: #FFFDF4 !important;
+        border-color: #FFFDF4 !important;
+        color: #000000 !important;
+    }
+    .st-key-password_fields [data-baseweb="input"] button * {
+        color: #000000 !important;
+        -webkit-text-fill-color: #000000 !important;
     }
     .st-key-password_fields {
         background: #DCE4D6;
