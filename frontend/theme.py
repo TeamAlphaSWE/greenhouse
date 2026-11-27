@@ -36,7 +36,9 @@ def page_header(title, subtitle=None):
      border-radius:20px; margin-bottom:24px; }}
     .gh-page-hero h1 {{ color:{CREAM}; font-size:clamp(26px,4vw,38px);
      margin:0; padding:0; line-height:1.2; }}
-    .gh-page-sub {{ color:{GOLD}; font-size:14px; margin:8px 0 0; }}
+    .gh-page-sub {{ color:{GOLD}; font-size:12px !important; font-weight:700;
+     letter-spacing:2px; text-transform:uppercase; margin:8px 0 0;
+     padding-top:5px; }}
     </style>
     <div class="gh-page-hero"><h1>{title}</h1>{subtitle_html}</div>
     """, unsafe_allow_html=True)

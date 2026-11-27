@@ -62,7 +62,7 @@ class ActivateSensorTests(unittest.TestCase):
         with patch("requests.get", side_effect=get):
             app = AppTest.from_file(str(PAGE)).run()
         self.assertFalse(app.exception)
-        self.assertIn("All sensors", app.subheader[0].value)
+        self.assertIn("All Sensors", app.subheader[0].value)
 
     def test_zone_and_area_start_unselected(self):
         with patch("requests.get", side_effect=get):
@@ -79,7 +79,7 @@ class ActivateSensorTests(unittest.TestCase):
             back.click().run()
         self.assertFalse(app.exception)
         self.assertNotIn("activating_sensor_id", app.session_state)
-        self.assertIn("All sensors", app.subheader[0].value)
+        self.assertIn("All Sensors", app.subheader[0].value)
 
     def test_zone_selection_narrows_area_options(self):
         with patch("requests.get", side_effect=get):
@@ -139,7 +139,7 @@ class ActivateSensorTests(unittest.TestCase):
         self.assertNotIn("zone_id", kwargs["json"])
         # a successful activation clears the flag and drops back to the list
         self.assertNotIn("activating_sensor_id", app.session_state)
-        self.assertIn("All sensors", app.subheader[0].value)
+        self.assertIn("All Sensors", app.subheader[0].value)
 
 
 if __name__ == "__main__":
