@@ -55,6 +55,7 @@ def get(url, **kwargs):
 class ActivateSensorTests(unittest.TestCase):
     def run_app(self):
         app = AppTest.from_file(str(PAGE))
+        app.session_state["admin"] = True
         app.session_state["activating_sensor_id"] = SENSOR["id"]
         return app.run()
 

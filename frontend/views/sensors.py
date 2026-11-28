@@ -13,6 +13,7 @@ from sensor_api import (
 )
 from theme import page_header
 from units import temperature_unit, to_display, to_local
+from user_api import is_admin
 
 st.set_page_config(
     page_title="Sensors | Greenhouse",
@@ -181,6 +182,9 @@ except requests.RequestException:
     st.stop()
 
 activating_sensor_id = st.session_state.get("activating_sensor_id")
+if activating_sensor_id and not is_admin():
+    st.session_state.pop("activating_sensor_id", None)
+    activating_sensor_id = None
 if activating_sensor_id:
     st.subheader("Activate sensor")
     show_activation_form(activating_sensor_id, sensors)
@@ -204,7 +208,7 @@ for s in sensors:
     row[0].write(s.get("name") or s["hardware_id"])
     if s.get("status") == "pending":
         row[1].badge("Pending", color="orange")
-        if row[2].button("Activate", key=f"activate-{s['id']}"):
+        if is_admin() and row[2].button("Activate", key=f"activate-{s['id']}"):
             st.session_state["activating_sensor_id"] = s["id"]
             st.rerun()
     else:
